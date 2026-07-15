@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-ink-200 dark:border-ink-700;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-white text-ink-800 dark:bg-ink-950 dark:text-ink-100 font-sans;
+    font-feature-settings: "ss01", "cv01";
+  }
+
+  ::selection {
+    @apply bg-gold-400 text-ink-950;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-ink-100 dark:bg-ink-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-300 dark:bg-ink-600 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gold-400;
+  }
+}
+
+@layer components {
+  .container-zt {
+    @apply max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-14;
+  }
+
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-gold-400 text-ink-950 font-semibold rounded-full
+           transition-all duration-300 ease-smooth hover:bg-gold-300 hover:shadow-lg hover:shadow-gold-400/30
+           active:scale-95 whitespace-nowrap;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-ink-200 dark:border-ink-600
+           text-ink-700 dark:text-ink-100 font-semibold rounded-full transition-all duration-300 ease-smooth
+           hover:border-gold-400 hover:text-gold-400 active:scale-95 whitespace-nowrap;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-ink-600 dark:text-ink-300 font-medium
+           rounded-lg transition-all duration-200 ease-smooth hover:bg-ink-100 dark:hover:bg-ink-800
+           hover:text-ink-900 dark:hover:text-white whitespace-nowrap;
+  }
+
+  .card-zt {
+    @apply bg-white dark:bg-ink-800/60 rounded-2xl border border-ink-100 dark:border-ink-700/50
+           transition-all duration-500 ease-smooth;
+  }
+
+  .glass {
+    @apply bg-white/80 dark:bg-ink-900/80 backdrop-blur-xl border border-white/40 dark:border-ink-700/40;
+  }
+
+  .heading-display {
+    @apply font-display tracking-tight;
+  }
+
+  .nav-link {
+    @apply relative px-3 py-2 text-sm font-medium text-ink-600 dark:text-ink-300
+           transition-colors duration-200 hover:text-ink-900 dark:hover:text-white whitespace-nowrap;
+  }
+
+  .nav-link-active {
+    @apply text-ink-900 dark:text-white;
+  }
+
+  .nav-link::after {
+    content: '';
+    @apply absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-gold-400 rounded-full
+           transition-all duration-300 ease-smooth w-0;
+  }
+  .nav-link:hover::after,
+  .nav-link-active::after {
+    @apply w-6;
+  }
+
+  .section-label {
+    @apply inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-gold-500;
+  }
+
+  .gold-divider {
+    @apply h-1 w-12 bg-gold-gradient rounded-full;
+  }
+
+  .input-zt {
+    @apply w-full px-4 py-3 bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-600
+           rounded-xl text-ink-800 dark:text-ink-100 placeholder:text-ink-400 dark:placeholder:text-ink-500
+           focus:outline-none focus:ring-2 focus:ring-gold-400/50 focus:border-gold-400
+           transition-all duration-200;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full;
+  }
+
+  .gradient-text {
+    @apply bg-gold-shimmer bg-clip-text text-transparent;
+    background-size: 200% auto;
+    animation: shimmer 3s linear infinite;
+  }
+
+  .hover-lift {
+    @apply transition-all duration-500 ease-smooth hover:-translate-y-1;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+}
