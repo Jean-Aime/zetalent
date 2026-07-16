@@ -2,15 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Menu, X, Sun, Moon, ChevronDown, Globe, LogIn, TrendingUp,
+  Search, Menu, X, Sun, Moon, ChevronDown, Globe, TrendingUp,
 } from 'lucide-react';
 import { ZTLogo } from '../brand/ZTLogo';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage, localeLabels } from '../../contexts/LanguageContext';
-import { navigation, sports, breakingNews } from '../../data/seed';
+import { navigation, sports } from '../../data/seed';
 import { getIcon } from '../../utils/icons';
 import { ArrowRight, Check } from 'lucide-react';
+import { api } from '../../lib/api';
 import type { Locale } from '../../types';
+
+// Fallback seed data shown until API responds
+const breakingNewsSeeds = [
+  { slug: 'star-striker-joins-kigali-queens', title: 'Star Striker Nadia Uwase Completes Blockbuster Move to Kigali Queens' },
+];
 
 export function Header() {
   const { theme, toggleTheme } = useTheme();
@@ -22,7 +28,20 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [langOpen, setLangOpen] = useState(false);
   const [sportsOpen, setSportsOpen] = useState(false);
+  const [liveBreaking, setLiveBreaking] = useState<{ slug: string; title: string }[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.getNews({ limit: '50' }).then(articles => {
+      const items = articles
+        .filter((a: any) => a.is_breaking === true || a.is_breaking === 't' || a.is_breaking === 'true')
+        .map((a: any) => ({
+          slug: a.slug,
+          title: a.translations?.en?.title || a.translations?.fr?.title || a.translations?.rw?.title || a.slug,
+        }));
+      if (items.length) setLiveBreaking(items);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -63,14 +82,14 @@ export function Header() {
           </span>
           <div className="relative flex-1 overflow-hidden">
             <div className="flex animate-ticker whitespace-nowrap">
-              {[...breakingNews, ...breakingNews].map((n, i) => (
+              {(liveBreaking.length > 0 ? [...liveBreaking, ...liveBreaking] : [...breakingNewsSeeds, ...breakingNewsSeeds]).map((n, i) => (
                 <Link
                   key={i}
                   to={`/news/${n.slug}`}
                   className="inline-flex items-center gap-2 px-6 text-ink-200 hover:text-gold-400 transition-colors"
                 >
                   <TrendingUp size={14} className="text-gold-400" />
-                  {t(n.title)}
+                  {n.title}
                 </Link>
               ))}
             </div>
@@ -227,11 +246,6 @@ export function Header() {
                 </AnimatePresence>
               </button>
 
-              {/* Login */}
-              <Link to="/auth" className="hidden sm:inline-flex btn-gold !py-2 !px-4 text-sm">
-                <LogIn size={16} />
-                <span className="hidden md:inline">Sign In</span>
-              </Link>
 
               {/* Mobile Menu Toggle */}
               <button
@@ -360,9 +374,6 @@ export function Header() {
                     </button>
                   ))}
                 </div>
-                <Link to="/auth" onClick={() => setMobileOpen(false)} className="btn-gold w-full">
-                  <LogIn size={18} /> Sign In
-                </Link>
               </div>
             </motion.div>
           </motion.div>

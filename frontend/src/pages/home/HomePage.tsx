@@ -8,12 +8,29 @@ import { SponsorsSection, NewsletterSection } from '../../components/home/Sponso
 import { NewsCard, Reveal } from '../../components/common/NewsCard';
 import { api } from '../../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 const SLIDE_DURATION = 6000;
 
-const heroStats = [
-  { label: 'FIFA #', value: '22' }, { label: 'Wins', value: '18' },
-  { label: 'Losses', value: '2' }, { label: 'Draws', value: '4' }, { label: 'Goals', value: '61' },
-];
+function computeStats(matches: Match[]) {
+  const finished = matches.filter(m => m.status === 'finished');
+  // treat Kigali Queens as the featured team — or just aggregate all home wins
+  // We compute overall league stats: W/D/L/Goals from all finished matches
+  let wins = 0, losses = 0, draws = 0, goals = 0;
+  for (const m of finished) {
+    if (m.home_score === null || m.away_score === null) continue;
+    goals += m.home_score + m.away_score;
+    if (m.home_score > m.away_score) wins++;
+    else if (m.home_score < m.away_score) losses++;
+    else draws++;
+  }
+  return { wins, losses, draws, goals, played: finished.length };
+}
 
 interface Article {
   id: string; slug: string; category: string; sport_slug: string;
@@ -30,14 +47,27 @@ interface Match {
   match_date: string; match_time: string; status: string; league_name: string;
 }
 
-function getTitle(a: Article) { return a.translations?.en?.title || a.slug; }
+function getBestLocale(a: Article) {
+  const locales = ['en', 'fr', 'rw'] as const;
+  return locales.find(l => a.translations?.[l]?.title?.trim()) ?? 'en';
+}
+function getTitle(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.title || a.slug; }
 
 /* ─── Hero ─── */
-function HomepageHero({ slides }: { slides: Article[] }) {
+function HomepageHero({ slides, matches }: { slides: Article[]; matches: Match[] }) {
   const [current, setCurrent] = useState(0);
   const next = useCallback(() => setCurrent(c => (c + 1) % Math.max(slides.length, 1)), [slides.length]);
   const prev = () => setCurrent(c => (c - 1 + Math.max(slides.length, 1)) % Math.max(slides.length, 1));
   useEffect(() => { const t = setInterval(next, SLIDE_DURATION); return () => clearInterval(t); }, [next]);
+
+  const stats = computeStats(matches);
+  const heroStats = [
+    { label: 'Played', value: String(stats.played) },
+    { label: 'Wins',   value: String(stats.wins) },
+    { label: 'Draws',  value: String(stats.draws) },
+    { label: 'Losses', value: String(stats.losses) },
+    { label: 'Goals',  value: String(stats.goals) },
+  ];
 
   const slide = slides[current];
   if (!slide) return (
@@ -55,7 +85,7 @@ function HomepageHero({ slides }: { slides: Article[] }) {
       <AnimatePresence mode="wait">
         <motion.div key={slide.id} initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
           transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }} className="absolute inset-0">
-          {slide.image_url && <img src={slide.image_url} alt={getTitle(slide)} className="h-full w-full object-cover object-top" />}
+          {slide.image_url && <img src={proxyUrl(slide.image_url)} alt={getTitle(slide)} className="h-full w-full object-cover object-top" />}
           <div className="absolute inset-0 bg-gradient-to-r from-ink-950/95 via-ink-950/70 to-ink-950/20" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-transparent to-ink-950/30" />
         </motion.div>
@@ -74,7 +104,7 @@ function HomepageHero({ slides }: { slides: Article[] }) {
           </AnimatePresence>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.35 }} className="mt-8 inline-block">
             <div className="bg-ink-900/80 backdrop-blur-sm border border-ink-700/60 rounded-2xl overflow-hidden">
-              <div className="px-5 py-2 border-b border-ink-700/50"><span className="text-[10px] font-bold uppercase tracking-[0.25em] text-ink-400">2026 Season Record</span></div>
+              <div className="px-5 py-2 border-b border-ink-700/50"><span className="text-[10px] font-bold uppercase tracking-[0.25em] text-ink-400">2026 Season · {stats.played} Matches</span></div>
               <div className="flex divide-x divide-ink-700/60">
                 {heroStats.map(stat => (
                   <div key={stat.label} className="flex flex-col items-center px-5 py-3">
@@ -152,7 +182,7 @@ function LatestNewsSection({ articles }: { articles: Article[] }) {
               <div className="mb-2"><span className="text-xs font-bold uppercase tracking-widest text-gold-500">{(main.sport_slug || '').toUpperCase()}</span></div>
               <h3 className="font-display text-2xl sm:text-3xl font-bold text-ink-900 dark:text-white leading-tight group-hover:text-gold-400 transition-colors mb-4 line-clamp-2">{getTitle(main)}</h3>
               <div className="relative flex-1 min-h-[280px] sm:min-h-[360px] rounded-2xl overflow-hidden bg-ink-100 dark:bg-ink-800">
-                {main.image_url && <img src={main.image_url} alt={getTitle(main)} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-700 absolute inset-0" />}
+                {main.image_url && <img src={proxyUrl(main.image_url)} alt={getTitle(main)} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-700 absolute inset-0" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-ink-950/40 to-transparent" />
                 {main.is_breaking && <div className="absolute top-4 left-4"><span className="chip bg-red-500 text-white animate-pulse text-xs">Breaking</span></div>}
                 <div className="absolute bottom-4 left-4 right-4 flex items-center gap-3 text-xs text-white/80">
@@ -168,7 +198,7 @@ function LatestNewsSection({ articles }: { articles: Article[] }) {
                 <motion.div key={article.id} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.08 + i * 0.06 }}>
                   <Link to={`/news/${article.slug}`} className="group block">
                     <div className="relative h-32 sm:h-36 rounded-xl overflow-hidden bg-ink-100 dark:bg-ink-800 mb-2">
-                      {article.image_url && <img src={article.image_url} alt={getTitle(article)} loading="lazy" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />}
+                      {article.image_url && <img src={proxyUrl(article.image_url)} alt={getTitle(article)} loading="lazy" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />}
                       <div className="absolute inset-0 bg-gradient-to-t from-ink-950/30 to-transparent" />
                     </div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-gold-500 block">{(article.sport_slug || '').toUpperCase()}</span>
@@ -189,6 +219,9 @@ function LatestNewsSection({ articles }: { articles: Article[] }) {
 function FixturesAndPromo({ matches }: { matches: Match[] }) {
   const [scrollRef, setScrollRef] = useState<HTMLDivElement | null>(null);
   const scroll = (dir: 'left' | 'right') => scrollRef?.scrollBy({ left: dir === 'right' ? 300 : -300, behavior: 'smooth' });
+
+  // next real upcoming match for the promo card
+  const nextMatch = matches.find(m => m.status === 'upcoming');
 
   return (
     <section className="py-10 sm:py-14 bg-ink-50 dark:bg-ink-900/50 border-t border-ink-100 dark:border-ink-800">
@@ -241,21 +274,30 @@ function FixturesAndPromo({ matches }: { matches: Match[] }) {
               ))}
             </div>
           </div>
-          <Reveal delay={0.2}>
-            <div className="hidden lg:flex w-[220px] shrink-0 flex-col justify-between rounded-2xl bg-gold-400 p-6 text-ink-950 relative overflow-hidden">
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-3"><Ticket size={20} className="text-ink-900" /><span className="text-xs font-bold uppercase tracking-widest">Match Tickets</span></div>
-                <p className="font-display text-xl font-bold leading-tight mb-1">KIGALI QUEENS</p>
-                <p className="font-display text-lg font-bold">VS <span className="text-ink-700">MUHANGA</span></p>
-                <p className="text-xs mt-2 text-ink-700 font-medium">20 July 2026 · 15:00</p>
+          {nextMatch && (
+            <Reveal delay={0.2}>
+              <div className="hidden lg:flex w-[220px] shrink-0 flex-col justify-between rounded-2xl bg-gold-400 p-6 text-ink-950 relative overflow-hidden">
+                <div className="relative">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Ticket size={20} className="text-ink-900" />
+                    <span className="text-xs font-bold uppercase tracking-widest">Next Match</span>
+                  </div>
+                  <p className="font-display text-base font-bold leading-tight mb-1 uppercase truncate">{nextMatch.home_team_name}</p>
+                  <p className="font-display text-sm font-bold uppercase">VS <span className="text-ink-700 truncate">{nextMatch.away_team_name}</span></p>
+                  <p className="text-xs mt-2 text-ink-700 font-medium">
+                    {nextMatch.match_date ? new Date(nextMatch.match_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+                    {nextMatch.match_time ? ` · ${nextMatch.match_time}` : ''}
+                  </p>
+                  {nextMatch.league_name && <p className="text-[10px] mt-1 text-ink-600 truncate">{nextMatch.league_name}</p>}
+                </div>
+                <div className="relative mt-4">
+                  <Link to="/fixtures" className="w-full flex items-center justify-center gap-2 bg-ink-950 text-white font-bold text-sm py-3 rounded-xl hover:bg-ink-800 transition-colors">
+                    <Ticket size={15} /> View Fixtures
+                  </Link>
+                </div>
               </div>
-              <div className="relative mt-4">
-                <Link to="/fixtures" className="w-full flex items-center justify-center gap-2 bg-ink-950 text-white font-bold text-sm py-3 rounded-xl hover:bg-ink-800 transition-colors">
-                  <Ticket size={15} /> Tickets Available
-                </Link>
-              </div>
-            </div>
-          </Reveal>
+            </Reveal>
+          )}
         </div>
       </div>
     </section>
@@ -295,7 +337,7 @@ function TrendingAndTeams({ articles, teams }: { articles: Article[]; teams: Tea
                   <Link to={`/teams/${team.slug}`} className="group flex items-center gap-4 p-4 rounded-2xl bg-ink-50 dark:bg-ink-800/60 hover:bg-gold-400/5 border border-transparent hover:border-gold-400/30 transition-all duration-300">
                     <span className="text-sm font-bold text-ink-300 dark:text-ink-600 w-5 text-center">{i + 1}</span>
                     {team.logo_url
-                      ? <img src={team.logo_url} alt={team.name} className="h-10 w-10 rounded-xl object-cover" />
+                      ? <img src={proxyUrl(team.logo_url)} alt={team.name} className="h-10 w-10 rounded-xl object-cover" />
                       : <div className="h-10 w-10 rounded-xl bg-ink-200 dark:bg-ink-700 flex items-center justify-center font-bold text-sm text-ink-500">{team.name.slice(0, 2)}</div>
                     }
                     <div className="flex-1 min-w-0">
@@ -340,7 +382,7 @@ export function HomePage() {
 
   return (
     <>
-      <HomepageHero slides={heroSlides} />
+      <HomepageHero slides={heroSlides} matches={matches} />
       <SportsStrip sports={sports} />
       <LatestNewsSection articles={articles} />
       <FixturesAndPromo matches={matches.slice(0, 10)} />

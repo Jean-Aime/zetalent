@@ -3,6 +3,13 @@ import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatRelative } from '../../utils/format';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 // Works with both API response shape and any legacy shape
 export interface AnyArticle {
   id: string;
@@ -36,13 +43,21 @@ export function getArticleImage(a: AnyArticle): string {
   return a.image_url || a.image || '';
 }
 export function getArticleTitle(a: AnyArticle): string {
-  if (a.translations?.en?.title) return a.translations.en.title;
+  const t = a.translations;
+  if (t) {
+    const best = (['en','fr','rw'] as const).find(l => t[l]?.title?.trim());
+    if (best) return t[best].title;
+  }
   if (typeof a.title === 'string') return a.title;
   if (a.title && typeof a.title === 'object') return (a.title as any).en || '';
   return a.slug;
 }
 export function getArticleExcerpt(a: AnyArticle): string {
-  if (a.translations?.en?.excerpt) return a.translations.en.excerpt;
+  const t = a.translations;
+  if (t) {
+    const best = (['en','fr','rw'] as const).find(l => t[l]?.title?.trim());
+    if (best) return t[best].excerpt || '';
+  }
   if (typeof a.excerpt === 'string') return a.excerpt;
   if (a.excerpt && typeof a.excerpt === 'object') return (a.excerpt as any).en || '';
   return '';
@@ -75,7 +90,7 @@ interface NewsCardProps {
 export function NewsCard({ article, variant = 'default', index = 0 }: NewsCardProps) {
   const title    = getArticleTitle(article);
   const excerpt  = getArticleExcerpt(article);
-  const image    = getArticleImage(article);
+  const image    = proxyUrl(getArticleImage(article));
   const date     = getArticleDate(article);
   const author   = getArticleAuthor(article);
   const avatar   = getArticleAuthorAvatar(article);

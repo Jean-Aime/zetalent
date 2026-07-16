@@ -4,6 +4,13 @@ import { Search, SlidersHorizontal, X, Loader2, Clock, Eye } from 'lucide-react'
 import { Reveal } from '../../components/common/NewsCard';
 import { api } from '../../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 const newsCategories = [
   { slug: 'match-reports', label: 'Match Reports' },
   { slug: 'transfers', label: 'Transfers' },
@@ -19,8 +26,12 @@ interface Article {
   translations: Record<string, { title: string; excerpt: string; body: string }>;
 }
 
-function getTitle(a: Article) { return a.translations?.en?.title || a.slug; }
-function getExcerpt(a: Article) { return a.translations?.en?.excerpt || ''; }
+function getBestLocale(a: Article) {
+  const locales = ['en', 'fr', 'rw'] as const;
+  return locales.find(l => a.translations?.[l]?.title?.trim()) ?? 'en';
+}
+function getTitle(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.title || a.slug; }
+function getExcerpt(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.excerpt || ''; }
 
 export function NewsPage() {
   const [searchParams] = useSearchParams();
@@ -127,7 +138,7 @@ export function NewsPage() {
                 <Link to={`/news/${article.slug}`} className="group flex flex-col card-zt overflow-hidden hover-lift hover:shadow-xl h-full">
                   <div className="relative h-52 overflow-hidden bg-ink-100 dark:bg-ink-800">
                     {article.image_url && (
-                      <img src={article.image_url} alt={getTitle(article)} loading="lazy"
+                      <img src={proxyUrl(article.image_url)} alt={getTitle(article)} loading="lazy"
                         className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-ink-950/40 to-transparent" />

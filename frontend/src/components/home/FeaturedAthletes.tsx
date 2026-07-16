@@ -5,6 +5,13 @@ import { ArrowRight } from 'lucide-react';
 import { SectionHeader, Reveal } from '../common/NewsCard';
 import { api } from '../../lib/api';
 
+const BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/api$/, '');
+function proxyUrl(url?: string | null) {
+  if (!url) return '';
+  if (url.startsWith('http://localhost') || url.startsWith('/')) return url;
+  return `${BASE}/api/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 interface Player {
   id: string; slug: string; name: string; team_name: string;
   position: string; shirt_number: number; flag: string;
@@ -36,7 +43,7 @@ export function FeaturedAthletes() {
               <Link to={`/players/${player.slug}`} className="group block card-zt overflow-hidden hover-lift hover:shadow-2xl">
                 <div className="relative h-72 overflow-hidden bg-ink-100 dark:bg-ink-700">
                   {player.photo_url ? (
-                    <img src={player.photo_url} alt={player.name} loading="lazy"
+                    <img src={proxyUrl(player.photo_url)} alt={player.name} loading="lazy"
                       className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-700" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-ink-200 to-ink-300 dark:from-ink-700 dark:to-ink-800">

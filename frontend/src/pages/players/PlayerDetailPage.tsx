@@ -5,6 +5,13 @@ import { Trophy, MapPin, Calendar, Cake, Ruler, Twitter, Instagram, ArrowRight, 
 import { Reveal } from '../../components/common/NewsCard';
 import { api } from '../../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 interface Player {
   id: string; slug: string; name: string; team_id: string; team_name: string;
   sport_slug: string; position: string; shirt_number: number;
@@ -51,7 +58,7 @@ export function PlayerDetailPage() {
               <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.6 }} className="relative rounded-3xl overflow-hidden h-[400px] bg-ink-100 dark:bg-ink-700 shadow-xl">
                 {player.photo_url ? (
-                  <img src={player.photo_url} alt={player.name} className="h-full w-full object-cover" />
+                  <img src={proxyUrl(player.photo_url)} alt={player.name} className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-ink-200 to-ink-300 dark:from-ink-700 dark:to-ink-800">
                     <span className="font-display text-7xl font-bold text-ink-400">{player.name.slice(0, 2).toUpperCase()}</span>

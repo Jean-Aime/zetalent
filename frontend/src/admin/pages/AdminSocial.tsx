@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Share2, Plus, Pin, PinOff, Edit3, Trash2, X, Check,
   Heart, MessageCircle, Repeat2, Image as ImageIcon,
-  Twitter, Instagram, Youtube, Facebook, Loader2, AlertCircle,
+  Twitter, Instagram, Youtube, Facebook, Loader2, AlertCircle, Link as LinkIcon,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -41,6 +41,8 @@ const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace
 
 const emptyForm: FormState = { platform: 'twitter', author: '', handle: '', content: '', category: 'latest', image_url: '', avatar_url: '' };
 
+type FormMode = 'manual' | 'tweet';
+
 export function AdminSocial() {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,11 @@ export function AdminSocial() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm);
+  const [formMode, setFormMode] = useState<FormMode>('tweet');
+  const [tweetUrl, setTweetUrl] = useState('');
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetched, setFetched] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -86,12 +93,23 @@ export function AdminSocial() {
     setPinnedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
-  const startAdd = () => { setShowForm(true); setEditingId(null); setFormData(emptyForm); };
+  const startAdd = () => { setShowForm(true); setEditingId(null); setFormData(emptyForm); setFormMode('tweet'); setTweetUrl(''); setFetchError(null); setFetched(false); };
   const startEdit = (p: SocialPost) => {
     setEditingId(p.id); setShowForm(false); setDeleteConfirmId(null);
     setFormData({ platform: p.platform, author: p.author, handle: p.handle || '', content: p.content, category: p.category, image_url: p.image_url || '', avatar_url: p.avatar_url || '' });
   };
-  const cancelForm = () => { setShowForm(false); setEditingId(null); setFormData(emptyForm); };
+  const cancelForm = () => { setShowForm(false); setEditingId(null); setFormData(emptyForm); setTweetUrl(''); setFetchError(null); setFetched(false); };
+
+  const importTweet = async () => {
+    if (!tweetUrl.trim()) return;
+    setFetching(true); setFetchError(null); setFetched(false);
+    try {
+      const data = await api.fetchTweet(tweetUrl.trim());
+      setFormData(prev => ({ ...prev, author: data.author, handle: data.handle, content: data.content, platform: 'twitter' }));
+      setFetched(true);
+    } catch (e: any) { setFetchError(e.message); }
+    finally { setFetching(false); }
+  };
 
   const saveForm = async () => {
     if (!formData.author || !formData.content) return;
@@ -127,61 +145,116 @@ export function AdminSocial() {
         <h3 className="text-base font-bold text-ink-900 dark:text-white">{editingId ? 'Edit Post' : 'New Social Post'}</h3>
         <button onClick={cancelForm} className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors"><X className="h-4 w-4" /></button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Platform</label>
-          <select value={formData.platform} onChange={e => update('platform', e.target.value)} className="input-zt">
-            <option value="twitter">Twitter</option>
-            <option value="instagram">Instagram</option>
-            <option value="youtube">YouTube</option>
-            <option value="facebook">Facebook</option>
-            <option value="tiktok">TikTok</option>
-          </select>
+
+      {/* mode tabs — only show on new post */}
+      {!editingId && (
+        <div className="flex gap-2 p-1 bg-ink-100 dark:bg-ink-700/50 rounded-xl">
+          <button onClick={() => { setFormMode('tweet'); setFetchError(null); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all ${
+              formMode === 'tweet' ? 'bg-white dark:bg-ink-800 text-sky-500 shadow-sm' : 'text-ink-500 hover:text-ink-700 dark:hover:text-ink-200'
+            }`}>
+            <Twitter className="h-4 w-4" /> Import from Tweet URL
+          </button>
+          <button onClick={() => setFormMode('manual')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all ${
+              formMode === 'manual' ? 'bg-white dark:bg-ink-800 text-ink-900 dark:text-white shadow-sm' : 'text-ink-500 hover:text-ink-700 dark:hover:text-ink-200'
+            }`}>
+            <Share2 className="h-4 w-4" /> Manual Entry
+          </button>
         </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Category</label>
-          <select value={formData.category} onChange={e => update('category', e.target.value)} className="input-zt">
-            <option value="latest">Latest</option>
-            <option value="fan">Fan</option>
-            <option value="match">Match</option>
-            <option value="official">Official</option>
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Author</label>
-          <input type="text" value={formData.author} onChange={e => update('author', e.target.value)} placeholder="e.g. ZT Media" className="input-zt" />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Handle</label>
-          <input type="text" value={formData.handle} onChange={e => update('handle', e.target.value)} placeholder="e.g. @ztmedia_rw" className="input-zt" />
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Content</label>
-        <textarea value={formData.content} onChange={e => update('content', e.target.value)} rows={3} placeholder="Write your post content…" className="input-zt resize-none" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Image URL (optional)</label>
-          <div className="relative">
-            <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
-            <input type="text" value={formData.image_url} onChange={e => update('image_url', e.target.value)} placeholder="https://…" className="input-zt pl-10" />
+      )}
+
+      {/* tweet URL importer */}
+      {formMode === 'tweet' && !editingId && (
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">Tweet / X Post URL</label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
+              <input
+                type="text"
+                value={tweetUrl}
+                onChange={e => { setTweetUrl(e.target.value); setFetchError(null); setFetched(false); }}
+                onKeyDown={e => e.key === 'Enter' && importTweet()}
+                placeholder="https://x.com/username/status/123456789"
+                className="input-zt pl-10"
+              />
+            </div>
+            <button onClick={importTweet} disabled={fetching || !tweetUrl.trim()}
+              className="btn-gold text-sm shrink-0">
+              {fetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Twitter className="h-4 w-4" />}
+              {fetching ? 'Fetching…' : 'Fetch'}
+            </button>
           </div>
+          {fetchError && (
+            <p className="flex items-center gap-2 text-xs text-red-500"><AlertCircle className="h-3.5 w-3.5" /> {fetchError}</p>
+          )}
+          {fetched && (
+            <p className="flex items-center gap-2 text-xs text-emerald-500"><Check className="h-3.5 w-3.5" /> Tweet imported — review and save below.</p>
+          )}
         </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Avatar URL (optional)</label>
-          <input type="text" value={formData.avatar_url} onChange={e => update('avatar_url', e.target.value)} placeholder="https://…" className="input-zt" />
-        </div>
-      </div>
-      <div className="flex items-center justify-end gap-3 pt-2 border-t border-ink-100 dark:border-ink-700/50">
-        <button onClick={cancelForm} className="px-5 py-2.5 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Cancel</button>
-        <button onClick={saveForm} disabled={saving} className="btn-gold text-sm">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {editingId ? 'Update Post' : 'Publish Post'}
-        </button>
-      </div>
+      )}
+
+      {/* show the rest of the form once fetched OR in manual mode OR editing */}
+      {(fetched || formMode === 'manual' || editingId) && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Platform</label>
+              <select value={formData.platform} onChange={e => update('platform', e.target.value)} className="input-zt">
+                <option value="twitter">Twitter / X</option>
+                <option value="instagram">Instagram</option>
+                <option value="youtube">YouTube</option>
+                <option value="facebook">Facebook</option>
+                <option value="tiktok">TikTok</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Category</label>
+              <select value={formData.category} onChange={e => update('category', e.target.value)} className="input-zt">
+                <option value="latest">Latest Posts</option>
+                <option value="match">Match Reactions</option>
+                <option value="official">Official Updates</option>
+                <option value="fan">Fan Reactions</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Author</label>
+              <input type="text" value={formData.author} onChange={e => update('author', e.target.value)} placeholder="e.g. ZT Media" className="input-zt" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Handle</label>
+              <input type="text" value={formData.handle} onChange={e => update('handle', e.target.value)} placeholder="e.g. @ztmedia_rw" className="input-zt" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Content</label>
+            <textarea value={formData.content} onChange={e => update('content', e.target.value)} rows={3} placeholder="Tweet content…" className="input-zt resize-none" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Image URL (optional)</label>
+              <div className="relative">
+                <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
+                <input type="text" value={formData.image_url} onChange={e => update('image_url', e.target.value)} placeholder="https://…" className="input-zt pl-10" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Avatar URL (optional)</label>
+              <input type="text" value={formData.avatar_url} onChange={e => update('avatar_url', e.target.value)} placeholder="https://…" className="input-zt" />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 pt-2 border-t border-ink-100 dark:border-ink-700/50">
+            <button onClick={cancelForm} className="px-5 py-2.5 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Cancel</button>
+            <button onClick={saveForm} disabled={saving || !formData.author || !formData.content} className="btn-gold text-sm">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {editingId ? 'Update Post' : 'Save Post'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 

@@ -3,15 +3,18 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   Users, User, Calendar, Newspaper, Mail, Award,
-  TrendingUp, ArrowRight, Clock,
-  Trophy, FileText, Image as ImageIcon, ChevronRight,
+  TrendingUp, ArrowRight, Clock, Trophy, ChevronRight,
 } from 'lucide-react';
 import { api, getUser } from '../../lib/api';
 
-const trafficBars = [
-  { day: 'Mon', height: 45 }, { day: 'Tue', height: 62 }, { day: 'Wed', height: 38 },
-  { day: 'Thu', height: 78 }, { day: 'Fri', height: 90 }, { day: 'Sat', height: 100 }, { day: 'Sun', height: 72 },
-];
+const BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/api$/, '');
+function proxyUrl(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://localhost') || url.startsWith('/')) return url;
+  return `${BASE}/api/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
+
 
 const quickActions = [
   { label: 'Add Article', to: '/admin/news', icon: Newspaper, desc: 'Publish a new story' },
@@ -27,7 +30,9 @@ interface Stats {
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({ teams: 0, players: 0, matches: 0, articles: 0, subscribers: 0, sponsors: 0 });
-  const [topArticles, setTopArticles] = useState<any[]>([]);
+  const [recentArticles, setRecentArticles] = useState<any[]>([]);
+  const [recentMatches, setRecentMatches] = useState<any[]>([]);
+  const [traffic, setTraffic] = useState<{ days: { label: string; visits: number }[]; total7d: number; changePercent: number | null; totalArticleViews: number } | null>(null);
   const user = getUser();
 
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -41,9 +46,15 @@ export function AdminDashboard() {
         teams: teams.length, players: players.length, matches: matches.length,
         articles: articles.length, subscribers: subs.length, sponsors: sponsors.length,
       });
-      const sorted = [...articles].sort((a: any, b: any) => (b.views || 0) - (a.views || 0)).slice(0, 5);
-      setTopArticles(sorted);
+      // Most recent 5 articles
+      const sorted = [...articles].sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ).slice(0, 5);
+      setRecentArticles(sorted);
+      // Most recent 4 matches (completed + upcoming)
+      setRecentMatches([...matches].slice(0, 4));
     }).catch(() => {});
+    api.getTraffic().then(setTraffic).catch(() => {});
   }, []);
 
   const statCards = [
@@ -85,9 +96,7 @@ export function AdminDashboard() {
                 <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.iconBg}`}>
                   <Icon className={`h-5 w-5 ${stat.iconColor}`} />
                 </div>
-                <span className="flex items-center gap-1 text-xs font-semibold text-green-500">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                </span>
+                <TrendingUp className="h-3.5 w-3.5 text-green-500" />
               </div>
               <p className="text-2xl font-bold text-ink-900 dark:text-white tracking-tight">{stat.value}</p>
               <p className="text-xs text-ink-400 dark:text-ink-500 mt-0.5">{stat.label}</p>
@@ -117,44 +126,65 @@ export function AdminDashboard() {
         })}
       </motion.div>
 
-      {/* Two-column: Activity + Traffic */}
+      {/* Two-column: Recent Matches + Traffic */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Matches */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}
           className="lg:col-span-2 card-zt p-6">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-bold text-ink-900 dark:text-white">Recent Activity</h2>
-            <button className="text-xs font-semibold text-gold-500 hover:text-gold-400 transition-colors flex items-center gap-1">
-              View all <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            <h2 className="text-lg font-bold text-ink-900 dark:text-white">Recent Matches</h2>
+            <Link to="/admin/matches" className="text-xs font-semibold text-gold-500 hover:text-gold-400 transition-colors flex items-center gap-1">
+              Manage <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
-          <div className="space-y-1">
-            {[
-              { icon: Newspaper, text: 'News articles managed via Admin News', time: 'Live' },
-              { icon: Trophy, text: 'Match results updated via Admin Matches', time: 'Live' },
-              { icon: User, text: 'Player profiles managed via Admin Players', time: 'Live' },
-              { icon: ImageIcon, text: 'Sponsors managed via Admin Sponsors', time: 'Live' },
-              { icon: FileText, text: 'Standings updated via Admin Standings', time: 'Live' },
-            ].map((item, idx) => {
-              const Icon = item.icon;
-              return (
-                <div key={idx} className="flex items-start gap-4 rounded-xl px-3 py-3 hover:bg-ink-50 dark:hover:bg-ink-700/30 transition-colors">
-                  <div className="relative shrink-0">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 dark:bg-ink-700/50">
-                      <Icon className="h-4 w-4 text-ink-500 dark:text-ink-300" />
-                    </div>
+          {recentMatches.length === 0 ? (
+            <p className="text-sm text-ink-400 dark:text-ink-500 py-6 text-center">No matches yet</p>
+          ) : (
+            <div className="space-y-2">
+              {recentMatches.map(m => (
+                <div key={m.id} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-ink-50 dark:hover:bg-ink-700/30 transition-colors">
+                  {/* Home */}
+                  <div className="flex items-center gap-2 flex-1 justify-end">
+                    <span className="text-sm font-semibold text-ink-800 dark:text-ink-100 text-right line-clamp-1">{m.home_team_name}</span>
+                    {m.home_team_logo ? (
+                      <img src={proxyUrl(m.home_team_logo)} alt="" className="h-8 w-8 rounded-full object-cover shrink-0 bg-ink-100 dark:bg-ink-700" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-ink-200 dark:bg-ink-700 flex items-center justify-center shrink-0">
+                        <Trophy className="h-4 w-4 text-ink-400" />
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0 pt-1.5">
-                    <p className="text-sm text-ink-800 dark:text-ink-100 leading-snug">{item.text}</p>
-                    <p className="text-xs text-ink-400 dark:text-ink-500 mt-0.5 flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {item.time}
+                  {/* Score / Status */}
+                  <div className="shrink-0 text-center min-w-[56px]">
+                    {m.status === 'completed' ? (
+                      <span className="text-sm font-bold text-ink-900 dark:text-white">{m.home_score ?? 0} – {m.away_score ?? 0}</span>
+                    ) : (
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        m.status === 'live' ? 'bg-red-500/10 text-red-500' : 'bg-ink-100 dark:bg-ink-700 text-ink-500 dark:text-ink-400'
+                      }`}>{m.status}</span>
+                    )}
+                    <p className="text-[10px] text-ink-400 dark:text-ink-500 mt-0.5">
+                      {new Date(m.match_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </p>
                   </div>
+                  {/* Away */}
+                  <div className="flex items-center gap-2 flex-1">
+                    {m.away_team_logo ? (
+                      <img src={proxyUrl(m.away_team_logo)} alt="" className="h-8 w-8 rounded-full object-cover shrink-0 bg-ink-100 dark:bg-ink-700" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-ink-200 dark:bg-ink-700 flex items-center justify-center shrink-0">
+                        <Trophy className="h-4 w-4 text-ink-400" />
+                      </div>
+                    )}
+                    <span className="text-sm font-semibold text-ink-800 dark:text-ink-100 line-clamp-1">{m.away_team_name}</span>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </motion.div>
 
+        {/* Traffic */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}
           className="card-zt p-6">
           <div className="flex items-center justify-between mb-5">
@@ -162,48 +192,55 @@ export function AdminDashboard() {
               <h2 className="text-lg font-bold text-ink-900 dark:text-white">Traffic</h2>
               <p className="text-xs text-ink-400 dark:text-ink-500 mt-0.5">Last 7 days</p>
             </div>
-            <span className="flex items-center gap-1 text-xs font-semibold text-green-500">
-              <TrendingUp className="h-3.5 w-3.5" /> +24%
-            </span>
+            {traffic?.changePercent != null && (
+              <span className={`flex items-center gap-1 text-xs font-semibold ${
+                traffic.changePercent >= 0 ? 'text-green-500' : 'text-red-400'
+              }`}>
+                <TrendingUp className="h-3.5 w-3.5" />
+                {traffic.changePercent >= 0 ? '+' : ''}{traffic.changePercent}%
+              </span>
+            )}
           </div>
+          {/* Bar chart */}
           <div className="flex items-end justify-between gap-2 h-40 mt-2">
-            {trafficBars.map(bar => (
-              <div key={bar.day} className="flex flex-1 flex-col items-center gap-2">
-                <div className="w-full flex items-end justify-center h-full">
-                  <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: `${bar.height}%` }}
-                    transition={{ duration: 0.6, delay: 0.3, ease: 'easeOut' }}
-                    className="w-full max-w-[28px] rounded-t-lg bg-gradient-to-t from-gold-400/40 to-gold-400 hover:from-gold-400 hover:to-gold-300 transition-colors cursor-pointer"
-                  />
+            {(traffic?.days ?? []).map((bar, i) => {
+              const max = Math.max(...(traffic?.days ?? []).map(d => d.visits), 1);
+              const pct = Math.round((bar.visits / max) * 100);
+              return (
+                <div key={i} className="flex flex-1 flex-col items-center gap-2">
+                  <div className="w-full flex items-end justify-center h-full">
+                    <motion.div
+                      title={`${bar.visits} visits`}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${Math.max(pct, 4)}%` }}
+                      transition={{ duration: 0.6, delay: 0.3 + i * 0.05, ease: 'easeOut' }}
+                      className="w-full max-w-[28px] rounded-t-lg bg-gradient-to-t from-gold-400/40 to-gold-400 hover:from-gold-400 hover:to-gold-300 transition-colors cursor-pointer"
+                    />
+                  </div>
+                  <span className="text-[10px] font-medium text-ink-400 dark:text-ink-500">{bar.label}</span>
                 </div>
-                <span className="text-[10px] font-medium text-ink-400 dark:text-ink-500">{bar.day}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="mt-5 pt-5 border-t border-ink-100 dark:border-ink-700/50 space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-ink-400 dark:text-ink-500">Total visits</span>
-              <span className="font-semibold text-ink-900 dark:text-white">48,320</span>
+              <span className="text-ink-400 dark:text-ink-500">Page views (7d)</span>
+              <span className="font-semibold text-ink-900 dark:text-white">{(traffic?.total7d ?? 0).toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-ink-400 dark:text-ink-500">Avg. duration</span>
-              <span className="font-semibold text-ink-900 dark:text-white">3m 42s</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-ink-400 dark:text-ink-500">Bounce rate</span>
-              <span className="font-semibold text-ink-900 dark:text-white">38%</span>
+              <span className="text-ink-400 dark:text-ink-500">Article reads</span>
+              <span className="font-semibold text-ink-900 dark:text-white">{(traffic?.totalArticleViews ?? 0).toLocaleString()}</span>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Top Articles */}
-      {topArticles.length > 0 && (
+      {/* Recent Articles */}
+      {recentArticles.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.25 }}
           className="card-zt p-6">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-bold text-ink-900 dark:text-white">Top Articles</h2>
+            <h2 className="text-lg font-bold text-ink-900 dark:text-white">Recent Articles</h2>
             <Link to="/admin/news" className="text-xs font-semibold text-gold-500 hover:text-gold-400 transition-colors flex items-center gap-1">
               Manage news <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -214,16 +251,28 @@ export function AdminDashboard() {
                 <tr className="text-left text-xs uppercase tracking-wider text-ink-400 dark:text-ink-500 border-b border-ink-100 dark:border-ink-700/50">
                   <th className="pb-3 pr-4 font-semibold">Article</th>
                   <th className="pb-3 pr-4 font-semibold">Category</th>
+                  <th className="pb-3 pr-4 font-semibold">Status</th>
                   <th className="pb-3 pr-4 font-semibold text-right">Views</th>
-                  <th className="pb-3 pr-4 font-semibold">Date</th>
+                  <th className="pb-3 font-semibold">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-50 dark:divide-ink-700/30">
-                {topArticles.map(article => (
+                {recentArticles.map(article => (
                   <tr key={article.id} className="group hover:bg-ink-50 dark:hover:bg-ink-700/20 transition-colors">
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-3">
-                        {article.image_url && <img src={article.image_url} alt="" className="h-10 w-14 rounded-lg object-cover shrink-0" loading="lazy" />}
+                        {article.image_url ? (
+                          <img
+                            src={proxyUrl(article.image_url)}
+                            alt=""
+                            className="h-10 w-14 rounded-lg object-cover shrink-0 bg-ink-100 dark:bg-ink-700"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="h-10 w-14 rounded-lg bg-ink-100 dark:bg-ink-700 shrink-0 flex items-center justify-center">
+                            <Newspaper className="h-4 w-4 text-ink-400" />
+                          </div>
+                        )}
                         <span className="font-medium text-ink-800 dark:text-ink-100 line-clamp-1 max-w-xs">
                           {article.translations?.en?.title || article.slug}
                         </span>
@@ -234,11 +283,21 @@ export function AdminDashboard() {
                         {article.category?.replace(/-/g, ' ')}
                       </span>
                     </td>
+                    <td className="py-3 pr-4">
+                      <span className={`chip capitalize ${
+                        article.status === 'published'
+                          ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                          : 'bg-ink-100 dark:bg-ink-700/50 text-ink-500'
+                      }`}>
+                        {article.status}
+                      </span>
+                    </td>
                     <td className="py-3 pr-4 text-right">
                       <span className="font-semibold text-ink-900 dark:text-white">{(article.views || 0).toLocaleString()}</span>
                     </td>
-                    <td className="py-3 pr-4 text-ink-400 dark:text-ink-500 whitespace-nowrap">
-                      {new Date(article.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    <td className="py-3 text-ink-400 dark:text-ink-500 whitespace-nowrap flex items-center gap-1">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      {new Date(article.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
                   </tr>
                 ))}

@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { RequireAuth } from './components/common/RequireAuth';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -53,11 +53,25 @@ const S = (C: React.ComponentType) => (
   <Suspense fallback={<PageLoader />}><C /></Suspense>
 );
 
+function PageTracker() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    // fire-and-forget, never block the UI
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/analytics/track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: pathname }),
+    }).catch(() => {});
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
         <BrowserRouter>
+          <PageTracker />
           <Routes>
             {/* ── Public site ── */}
             <Route element={<Layout />}>
@@ -74,8 +88,11 @@ export default function App() {
               <Route path="/standings" element={S(StandingsPage)} />
               <Route path="/about" element={S(AboutPage)} />
               <Route path="/contact" element={S(ContactPage)} />
-              <Route path="/auth" element={S(AuthPage)} />
             </Route>
+
+            {/* ── Auth (no header/footer) ── */}
+            <Route path="/auth" element={S(AuthPage)} />
+            <Route path="/login" element={<Navigate to="/auth" replace />} />
 
             {/* ── Admin panel ── */}
             <Route path="/admin" element={<RequireAuth>{S(AdminLayout)}</RequireAuth>}>

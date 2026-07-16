@@ -1,7 +1,137 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Plus, Edit3, Trash2, X, Check, Search, Star, Loader2, AlertCircle } from 'lucide-react';
-import { api } from '../../lib/api';
+import { User, Plus, Edit3, Trash2, X, Check, Search, Star, Loader2, AlertCircle, Link as LinkIcon, Upload } from 'lucide-react';
+import { api, uploadImage } from '../../lib/api';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+// Extract the real image URL from wrapper URLs (e.g. Google Images imgres links)
+function sanitizeImageUrl(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  try {
+    const parsed = new URL(trimmed);
+    // Google Images: google.com/imgres?imgurl=<actual url>&...
+    if (parsed.hostname.includes('google.') && parsed.pathname === '/imgres') {
+      const imgurl = parsed.searchParams.get('imgurl');
+      if (imgurl) return decodeURIComponent(imgurl);
+    }
+    // Generic: any URL that has an imgurl= or direct_url= param pointing to an image
+    for (const param of ['imgurl', 'direct_url', 'image_url', 'src']) {
+      const v = parsed.searchParams.get(param);
+      if (v && /^https?:\/\/.+\.(jpe?g|png|webp|gif|svg|avif)/i.test(v)) {
+        return decodeURIComponent(v);
+      }
+    }
+  } catch {
+    // not a valid URL, return as-is
+  }
+  return trimmed;
+}
+
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  const clean = sanitizeImageUrl(url);
+  if (clean.startsWith('http://localhost') || clean.startsWith('http://127.0.0.1')) return clean;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(clean)}`;
+}
+
+function PhotoPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [tab, setTab] = useState<'url' | 'upload'>('url');
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState('');
+  const [imgErr, setImgErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setImgErr(null); }, [value]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setUploadErr('');
+    try {
+      const hosted = await uploadImage(file);
+      onChange(hosted);
+    } catch (err: any) {
+      setUploadErr(err.message || 'Upload failed');
+    } finally { setUploading(false); }
+  };
+
+  const handleImgError = async () => {
+    // Ask the proxy what went wrong
+    try {
+      const res = await fetch(proxyUrl(value));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setImgErr(data.error || `Error ${res.status}`);
+      } else {
+        setImgErr('Image failed to load');
+      }
+    } catch {
+      setImgErr('Cannot reach image — check the URL');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex rounded-lg overflow-hidden border border-ink-200 dark:border-ink-700 text-xs font-semibold">
+        <button type="button" onClick={() => setTab('url')}
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 transition-colors ${
+            tab === 'url' ? 'bg-gold-400 text-ink-950' : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-50 dark:hover:bg-ink-700'
+          }`}>
+          <LinkIcon className="h-3 w-3" /> URL
+        </button>
+        <button type="button" onClick={() => setTab('upload')}
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 transition-colors ${
+            tab === 'upload' ? 'bg-gold-400 text-ink-950' : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-50 dark:hover:bg-ink-700'
+          }`}>
+          <Upload className="h-3 w-3" /> Upload
+        </button>
+      </div>
+
+      {tab === 'url' ? (
+        <div className="space-y-1">
+          <input type="text" value={value} onChange={e => onChange(sanitizeImageUrl(e.target.value))}
+            placeholder="https://example.com/photo.jpg" className="input-zt text-sm" />
+          <p className="text-xs text-ink-400 dark:text-ink-500">Paste a direct image URL — Google Images links are auto-resolved.</p>
+        </div>
+      ) : (
+        <div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-ink-300 dark:border-ink-600 text-sm text-ink-500 hover:border-gold-400 hover:text-gold-500 transition-colors disabled:opacity-50">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploading ? 'Uploading…' : 'Click to choose image'}
+          </button>
+          {uploadErr && <p className="text-xs text-red-500 mt-1">{uploadErr}</p>}
+        </div>
+      )}
+
+      {value && (
+        <div className="flex items-center gap-3 p-2 rounded-xl border border-ink-100 dark:border-ink-700/50 bg-ink-50 dark:bg-ink-800/50">
+          {imgErr ? (
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20">
+              <AlertCircle className="h-5 w-5 text-red-400" />
+            </div>
+          ) : (
+            <img src={proxyUrl(value)} alt="photo preview"
+              className="h-12 w-12 rounded-full object-cover bg-white dark:bg-ink-900 ring-1 ring-ink-200 dark:ring-ink-600"
+              onError={handleImgError} />
+          )}
+          <div className="flex-1 min-w-0">
+            {imgErr && (
+              <p className="text-xs text-red-500 mb-0.5">⚠️ {imgErr}</p>
+            )}
+            <span className="text-xs text-ink-400 truncate block">{value.split('/').pop()}</span>
+          </div>
+          <button type="button" onClick={() => onChange('')} className="text-ink-400 hover:text-red-500 transition-colors shrink-0">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Sport { id: string; slug: string; name: string; color: string; }
 interface Team { id: string; name: string; sport_id: string; }
@@ -15,11 +145,15 @@ interface FormState {
   name: string; team_id: string; sport_id: string; position: string;
   shirt_number: number; nationality: string; flag: string; age: number;
   height: string; photo_url: string; bio: string; is_featured: boolean;
+  achievements: string[];
+  stats: { label: string; value: string }[];
+  social_links: { platform: string; handle: string }[];
 }
 
 const emptyForm: FormState = {
   name: '', team_id: '', sport_id: '', position: '', shirt_number: 0,
   nationality: 'Rwanda', flag: '🇷🇼', age: 20, height: '', photo_url: '', bio: '', is_featured: false,
+  achievements: [], stats: [], social_links: [],
 };
 
 export function AdminPlayers() {
@@ -60,9 +194,18 @@ export function AdminPlayers() {
   const getSportName = (p: Player) => sports.find(s => s.id === p.sport_id || s.slug === p.sport_slug)?.name || '—';
 
   const startAdd = () => { setShowForm(true); setEditingId(null); setFormData({ ...emptyForm, sport_id: sports[0]?.id || '' }); };
-  const startEdit = (p: Player) => {
+  const startEdit = (p: any) => {
     setEditingId(p.id); setShowForm(false); setDeleteConfirmId(null);
-    setFormData({ name: p.name, team_id: p.team_id || '', sport_id: p.sport_id || '', position: p.position || '', shirt_number: p.shirt_number || 0, nationality: p.nationality || 'Rwanda', flag: p.flag || '🇷🇼', age: p.age || 20, height: p.height || '', photo_url: p.photo_url || '', bio: p.bio || '', is_featured: p.is_featured || false });
+    setFormData({
+      name: p.name, team_id: p.team_id || '', sport_id: p.sport_id || '',
+      position: p.position || '', shirt_number: p.shirt_number || 0,
+      nationality: p.nationality || 'Rwanda', flag: p.flag || '🇷🇼',
+      age: p.age || 20, height: p.height || '', photo_url: p.photo_url || '',
+      bio: p.bio || '', is_featured: p.is_featured || false,
+      achievements: Array.isArray(p.achievements) ? p.achievements : [],
+      stats: Array.isArray(p.stats) ? p.stats : [],
+      social_links: Array.isArray(p.social_links) ? p.social_links : [],
+    });
   };
   const cancelForm = () => { setShowForm(false); setEditingId(null); setFormData(emptyForm); };
 
@@ -172,13 +315,81 @@ export function AdminPlayers() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Photo URL</label>
-                <input type="text" value={formData.photo_url} onChange={e => update('photo_url', e.target.value)} placeholder="https://..." className="input-zt" />
+                <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Photo</label>
+                <PhotoPicker value={formData.photo_url} onChange={url => update('photo_url', url)} />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Bio</label>
                 <textarea value={formData.bio} onChange={e => update('bio', e.target.value)} rows={3} placeholder="Player biography..." className="input-zt resize-none" />
               </div>
+
+              {/* Stats */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">Career Stats</label>
+                  <button type="button" onClick={() => update('stats', [...formData.stats, { label: '', value: '' }])}
+                    className="text-xs text-gold-500 hover:text-gold-400 font-semibold">+ Add Stat</button>
+                </div>
+                <div className="space-y-2">
+                  {formData.stats.map((stat, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input type="text" value={stat.label} onChange={e => { const s = [...formData.stats]; s[i] = { ...s[i], label: e.target.value }; update('stats', s); }}
+                        placeholder="Label (e.g. Goals)" className="input-zt text-sm flex-1" />
+                      <input type="text" value={stat.value} onChange={e => { const s = [...formData.stats]; s[i] = { ...s[i], value: e.target.value }; update('stats', s); }}
+                        placeholder="Value (e.g. 38)" className="input-zt text-sm w-28" />
+                      <button type="button" onClick={() => update('stats', formData.stats.filter((_, j) => j !== i))}
+                        className="text-ink-400 hover:text-red-500 transition-colors shrink-0"><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {formData.stats.length === 0 && <p className="text-xs text-ink-400">No stats yet — click + Add Stat</p>}
+                </div>
+              </div>
+
+              {/* Achievements */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">Achievements</label>
+                  <button type="button" onClick={() => update('achievements', [...formData.achievements, ''])}
+                    className="text-xs text-gold-500 hover:text-gold-400 font-semibold">+ Add</button>
+                </div>
+                <div className="space-y-2">
+                  {formData.achievements.map((ach, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input type="text" value={ach} onChange={e => { const a = [...formData.achievements]; a[i] = e.target.value; update('achievements', a); }}
+                        placeholder="e.g. 5x League Champion" className="input-zt text-sm flex-1" />
+                      <button type="button" onClick={() => update('achievements', formData.achievements.filter((_, j) => j !== i))}
+                        className="text-ink-400 hover:text-red-500 transition-colors shrink-0"><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {formData.achievements.length === 0 && <p className="text-xs text-ink-400">No achievements yet — click + Add</p>}
+                </div>
+              </div>
+
+              {/* Social Links */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">Social Links</label>
+                  <button type="button" onClick={() => update('social_links', [...formData.social_links, { platform: 'twitter', handle: '' }])}
+                    className="text-xs text-gold-500 hover:text-gold-400 font-semibold">+ Add</button>
+                </div>
+                <div className="space-y-2">
+                  {formData.social_links.map((sl, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <select value={sl.platform} onChange={e => { const s = [...formData.social_links]; s[i] = { ...s[i], platform: e.target.value }; update('social_links', s); }}
+                        className="input-zt text-sm w-36">
+                        <option value="twitter">Twitter / X</option>
+                        <option value="instagram">Instagram</option>
+                      </select>
+                      <input type="text" value={sl.handle} onChange={e => { const s = [...formData.social_links]; s[i] = { ...s[i], handle: e.target.value }; update('social_links', s); }}
+                        placeholder="@handle" className="input-zt text-sm flex-1" />
+                      <button type="button" onClick={() => update('social_links', formData.social_links.filter((_, j) => j !== i))}
+                        className="text-ink-400 hover:text-red-500 transition-colors shrink-0"><X className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  {formData.social_links.length === 0 && <p className="text-xs text-ink-400">No social links yet — click + Add</p>}
+                </div>
+              </div>
+
               <button onClick={() => update('is_featured', !formData.is_featured)}
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${formData.is_featured ? 'bg-gold-400/15 text-gold-600 dark:text-gold-400 ring-1 ring-gold-400/30' : 'bg-ink-100 dark:bg-ink-700/50 text-ink-500'}`}>
                 <Star className={`h-4 w-4 ${formData.is_featured ? 'fill-gold-400' : ''}`} />
@@ -235,7 +446,7 @@ export function AdminPlayers() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {player.photo_url ? (
-                          <img src={player.photo_url} alt={player.name} className="h-10 w-10 rounded-full object-cover ring-1 ring-ink-200 dark:ring-ink-600" loading="lazy" />
+                          <img src={proxyUrl(player.photo_url)} alt={player.name} className="h-10 w-10 rounded-full object-cover ring-1 ring-ink-200 dark:ring-ink-600" loading="lazy" />
                         ) : (
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ink-200 dark:bg-ink-700 text-ink-500 font-bold text-sm">
                             {player.name.slice(0, 2).toUpperCase()}

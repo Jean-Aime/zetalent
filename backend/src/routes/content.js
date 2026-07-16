@@ -109,6 +109,50 @@ sponsorsRouter.delete('/:id', async (req, res) => {
 
 // ===== SOCIAL POSTS =====
 const socialRouter = require('express').Router();
+const fetch = (() => { try { return require('node-fetch'); } catch { return null; } })();
+
+// ensure tweet_url column exists (safe to run every startup)
+pool.query(`ALTER TABLE social_posts ADD COLUMN IF NOT EXISTS tweet_url TEXT`).catch(() => {});
+
+// ── Fetch tweet metadata from oEmbed (free, no API key) ──
+socialRouter.post('/fetch-tweet', async (req, res) => {
+  const { url } = req.body;
+  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url required' });
+  if (!fetch) return res.status(500).json({ error: 'node-fetch not available' });
+
+  // validate it looks like a tweet URL
+  if (!/twitter\.com|x\.com/.test(url)) return res.status(400).json({ error: 'Not a Twitter/X URL' });
+
+  try {
+    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`;
+    const r = await fetch(oembedUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
+    if (!r.ok) return res.status(r.status).json({ error: 'Tweet not found or not public' });
+    const data = await r.json();
+
+    // extract plain text from the HTML (strip <a> tags etc.)
+    const text = data.html
+      .replace(/<a[^>]*>.*?<\/a>/gs, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .trim();
+
+    // extract handle from author_url: https://twitter.com/handle
+    const handle = (data.author_url || '').split('/').filter(Boolean).pop() || '';
+
+    res.json({
+      author: data.author_name || '',
+      handle: handle ? `@${handle}` : '',
+      content: text,
+      tweet_url: url,
+      platform: 'twitter',
+    });
+  } catch (err) {
+    const msg = (err.message || '').toLowerCase();
+    if (msg.includes('timeout')) return res.status(504).json({ error: 'Request timed out' });
+    res.status(502).json({ error: 'Failed to fetch tweet' });
+  }
+});
 
 socialRouter.get('/', async (req, res) => {
   try {
@@ -124,13 +168,13 @@ socialRouter.get('/', async (req, res) => {
 socialRouter.use(authenticate);
 
 socialRouter.post('/', async (req, res) => {
-  const { platform, author, handle, avatar_url, content, image_url, likes, comments, shares, category } = req.body;
+  const { platform, author, handle, avatar_url, content, image_url, likes, comments, shares, category, tweet_url } = req.body;
   if (!platform || !author || !content) return res.status(400).json({ error: 'platform, author and content are required' });
   try {
     const { rows } = await pool.query(
-      `INSERT INTO social_posts (platform,author,handle,avatar_url,content,image_url,likes,comments,shares,category)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [platform,author,handle,avatar_url,content,image_url,likes||0,comments||0,shares||0,category||'latest']
+      `INSERT INTO social_posts (platform,author,handle,avatar_url,content,image_url,likes,comments,shares,category,tweet_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [platform,author,handle,avatar_url,content,image_url,likes||0,comments||0,shares||0,category||'latest',tweet_url||null]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

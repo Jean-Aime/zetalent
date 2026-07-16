@@ -1,7 +1,40 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Plus, Edit3, Trash2, X, Check, Search, MapPin, User, Loader2, AlertCircle } from 'lucide-react';
-import { api } from '../../lib/api';
+import { Users, Plus, Edit3, Trash2, X, Check, Search, MapPin, User, Loader2, AlertCircle, Link as LinkIcon, Upload } from 'lucide-react';
+import { api, uploadImage } from '../../lib/api';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+// Extract the real image URL from wrapper URLs (e.g. Google Images imgres links)
+function sanitizeImageUrl(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  try {
+    const parsed = new URL(trimmed);
+    // Google Images: google.com/imgres?imgurl=<actual url>&...
+    if (parsed.hostname.includes('google.') && parsed.pathname === '/imgres') {
+      const imgurl = parsed.searchParams.get('imgurl');
+      if (imgurl) return decodeURIComponent(imgurl);
+    }
+    // Generic: any URL that has an imgurl= or similar param pointing to an image
+    for (const param of ['imgurl', 'direct_url', 'image_url', 'src']) {
+      const v = parsed.searchParams.get(param);
+      if (v && /^https?:\/\/.+\.(jpe?g|png|webp|gif|svg|avif)/i.test(v)) {
+        return decodeURIComponent(v);
+      }
+    }
+  } catch {
+    // not a valid URL, return as-is
+  }
+  return trimmed;
+}
+
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  const clean = sanitizeImageUrl(url);
+  if (clean.startsWith('http://localhost') || clean.startsWith('http://127.0.0.1')) return clean;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(clean)}`;
+}
 
 interface Sport { id: string; slug: string; name: string; color: string; }
 interface Team {
@@ -19,6 +52,102 @@ const emptyForm: FormState = {
   name: '', short_name: '', sport_id: '', city: '', founded: 2020,
   stadium: '', coach: '', primary_color: '#F4B400', logo_url: '', description: '',
 };
+
+function LogoPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [tab, setTab] = useState<'url' | 'upload'>('url');
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState('');
+  const [imgErr, setImgErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setImgErr(null); }, [value]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setUploadErr('');
+    try {
+      const hosted = await uploadImage(file);
+      onChange(hosted);
+    } catch (err: any) {
+      setUploadErr(err.message || 'Upload failed');
+    } finally { setUploading(false); }
+  };
+
+  const handleImgError = async () => {
+    try {
+      const res = await fetch(proxyUrl(value));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setImgErr(data.error || `Error ${res.status}`);
+      } else {
+        setImgErr('Image failed to load');
+      }
+    } catch {
+      setImgErr('Cannot reach image — check the URL');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex rounded-lg overflow-hidden border border-ink-200 dark:border-ink-700 text-xs font-semibold">
+        <button type="button" onClick={() => setTab('url')}
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 transition-colors ${
+            tab === 'url' ? 'bg-gold-400 text-ink-950' : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-50 dark:hover:bg-ink-700'
+          }`}>
+          <LinkIcon className="h-3 w-3" /> URL
+        </button>
+        <button type="button" onClick={() => setTab('upload')}
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 transition-colors ${
+            tab === 'upload' ? 'bg-gold-400 text-ink-950' : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-50 dark:hover:bg-ink-700'
+          }`}>
+          <Upload className="h-3 w-3" /> Upload
+        </button>
+      </div>
+
+      {tab === 'url' ? (
+        <div className="space-y-1">
+          <input type="text" value={value} onChange={e => onChange(sanitizeImageUrl(e.target.value))}
+            placeholder="https://example.com/logo.png" className="input-zt text-sm" />
+          <p className="text-xs text-ink-400 dark:text-ink-500">Paste a direct image URL — Google Images links are auto-resolved.</p>
+        </div>
+      ) : (
+        <div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-ink-300 dark:border-ink-600 text-sm text-ink-500 hover:border-gold-400 hover:text-gold-500 transition-colors disabled:opacity-50">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploading ? 'Uploading…' : 'Click to choose image'}
+          </button>
+          {uploadErr && <p className="text-xs text-red-500 mt-1">{uploadErr}</p>}
+        </div>
+      )}
+
+      {value && (
+        <div className="flex items-center gap-3 p-2 rounded-xl border border-ink-100 dark:border-ink-700/50 bg-ink-50 dark:bg-ink-800/50">
+          {imgErr ? (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+            </div>
+          ) : (
+            <img src={proxyUrl(value)} alt="logo preview"
+              className="h-10 w-10 rounded-lg object-contain bg-white dark:bg-ink-900"
+              onError={handleImgError} />
+          )}
+          <div className="flex-1 min-w-0">
+            {imgErr && (
+              <p className="text-xs text-red-500 mb-0.5">⚠️ {imgErr}</p>
+            )}
+            <span className="text-xs text-ink-400 truncate block">{value.split('/').pop()}</span>
+          </div>
+          <button type="button" onClick={() => onChange('')} className="text-ink-400 hover:text-red-500 transition-colors shrink-0">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AdminTeams() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -164,8 +293,8 @@ export function AdminTeams() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Logo URL</label>
-                  <input type="text" value={formData.logo_url} onChange={e => update('logo_url', e.target.value)} placeholder="https://..." className="input-zt" />
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2">Logo</label>
+                  <LogoPicker value={formData.logo_url} onChange={url => update('logo_url', url)} />
                 </div>
               </div>
               <div>
@@ -216,7 +345,7 @@ export function AdminTeams() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {team.logo_url ? (
-                          <img src={team.logo_url} alt={team.name} className="h-10 w-10 rounded-xl object-cover" loading="lazy" />
+                          <img src={proxyUrl(team.logo_url)} alt={team.name} className="h-10 w-10 rounded-xl object-cover" loading="lazy" />
                         ) : (
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl font-bold text-white text-sm" style={{ backgroundColor: team.primary_color || '#F4B400' }}>
                             {(team.short_name || team.name).slice(0, 2)}

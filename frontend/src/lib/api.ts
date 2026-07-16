@@ -27,6 +27,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+export async function uploadImage(file: File): Promise<string> {
+  const token = getToken();
+  const form = new FormData();
+  form.append('image', file);
+  const res = await fetch(`${BASE_URL}/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Upload failed');
+  return data.url as string;
+}
+
 export const api = {
   // ── Auth ──────────────────────────────────────────────────────────────────
   login: (email: string, password: string) =>
@@ -70,6 +84,7 @@ export const api = {
     const q = new URLSearchParams(params as Record<string, string>).toString();
     return request<any[]>(`/news${q ? `?${q}` : ''}`);
   },
+  getArticleBySlug: (slug: string) => request<any>(`/news/${slug}`),
   getAdminNews: () => request<any[]>('/news/admin/all'),
   createArticle: (data: object) => request('/news', { method: 'POST', body: JSON.stringify(data) }),
   updateArticle: (id: string, data: object) => request(`/news/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -89,6 +104,7 @@ export const api = {
 
   // ── Social Posts ──────────────────────────────────────────────────────────
   getSocialPosts: (category?: string) => request<any[]>(`/social${category ? `?category=${category}` : ''}`),
+  fetchTweet: (url: string) => request<{ author: string; handle: string; content: string; tweet_url: string; platform: string }>('/social/fetch-tweet', { method: 'POST', body: JSON.stringify({ url }) }),
   createSocialPost: (data: object) => request('/social', { method: 'POST', body: JSON.stringify(data) }),
   updateSocialPost: (id: string, data: object) => request(`/social/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteSocialPost: (id: string) => request(`/social/${id}`, { method: 'DELETE' }),
@@ -105,6 +121,15 @@ export const api = {
   toggleSubscriber: (id: string, is_active: boolean) => request(`/newsletter/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active }) }),
   deleteSubscriber: (id: string) => request(`/newsletter/${id}`, { method: 'DELETE' }),
   subscribe: (email: string, source?: string) => request('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email, source }) }),
+
+  // ── Analytics ─────────────────────────────────────────────────────────────
+  trackPageView: (path: string) => request('/analytics/track', { method: 'POST', body: JSON.stringify({ path }) }),
+  getTraffic: () => request<{
+    days: { label: string; visits: number }[];
+    total7d: number;
+    changePercent: number | null;
+    totalArticleViews: number;
+  }>('/analytics/traffic'),
 
   // ── Admin Users ───────────────────────────────────────────────────────────
   getUsers: () => request<any[]>('/users'),

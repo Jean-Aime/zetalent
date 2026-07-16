@@ -5,6 +5,13 @@ import { MapPin, Calendar, Users, Trophy, ArrowLeft, ArrowRight, Shirt, Award, N
 import { Reveal } from '../../components/common/NewsCard';
 import { api } from '../../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 interface Team {
   id: string; slug: string; name: string; short_name: string;
   sport_id: string; sport_slug: string; city: string; founded: number;
@@ -75,7 +82,7 @@ export function TeamDetailPage() {
                 <ArrowLeft size={16} /> Back to Teams
               </Link>
               {team.logo_url ? (
-                <img src={team.logo_url} alt={team.name} className="h-28 w-28 rounded-2xl object-cover ring-4 ring-white/10 bg-white mb-5" />
+                <img src={proxyUrl(team.logo_url)} alt={team.name} className="h-28 w-28 rounded-2xl object-cover ring-4 ring-white/10 bg-white mb-5" />
               ) : (
                 <div className="h-28 w-28 rounded-2xl ring-4 ring-white/10 bg-white flex items-center justify-center font-display font-bold text-3xl text-ink-700 mb-5">
                   {(team.short_name || team.name).slice(0, 2)}
@@ -147,7 +154,7 @@ export function TeamDetailPage() {
                   <Link to={`/players/${player.slug}`} className="group flex flex-col card-zt overflow-hidden hover-lift hover:shadow-xl h-full">
                     <div className="relative h-52 overflow-hidden bg-ink-100 dark:bg-ink-700">
                       {player.photo_url ? (
-                        <img src={player.photo_url} alt={player.name} loading="lazy" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                        <img src={proxyUrl(player.photo_url)} alt={player.name} loading="lazy" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-700" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-ink-200 to-ink-300 dark:from-ink-700 dark:to-ink-800">
                           <span className="font-display text-4xl font-bold text-ink-400">{player.name.slice(0, 2).toUpperCase()}</span>
@@ -226,7 +233,7 @@ export function TeamDetailPage() {
               {news.map((a, i) => (
                 <Reveal key={a.id} delay={i * 0.05}>
                   <Link to={`/news/${a.slug}`} className="group flex flex-col card-zt overflow-hidden hover-lift hover:shadow-xl">
-                    {a.image_url && <img src={a.image_url} alt={getTitle(a)} loading="lazy" className="h-44 w-full object-cover group-hover:scale-105 transition-transform duration-500" />}
+                    {a.image_url && <img src={proxyUrl(a.image_url)} alt={getTitle(a)} loading="lazy" className="h-44 w-full object-cover group-hover:scale-105 transition-transform duration-500" />}
                     <div className="p-4 flex-1">
                       <h3 className="font-semibold text-sm text-ink-800 dark:text-ink-100 group-hover:text-gold-400 transition-colors line-clamp-2">{getTitle(a)}</h3>
                       <p className="text-xs text-ink-400 mt-2">{new Date(a.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>

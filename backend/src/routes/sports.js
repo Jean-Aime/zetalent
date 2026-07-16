@@ -25,8 +25,13 @@ router.post('/', async (req, res) => {
   if (!slug || !name) return res.status(400).json({ error: 'slug and name are required' });
   try {
     const { rows } = await pool.query(
-      `INSERT INTO sports (slug, name, icon, color, team_count, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO sports (slug, name, icon, color, team_count, sort_order, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
+       ON CONFLICT (slug) DO UPDATE SET
+         name = EXCLUDED.name, icon = EXCLUDED.icon, color = EXCLUDED.color,
+         team_count = EXCLUDED.team_count, sort_order = EXCLUDED.sort_order,
+         updated_at = now()
+       RETURNING *`,
       [slug, name, icon || 'Trophy', color || '#F4B400', team_count || 0, sort_order || 0]
     );
     res.status(201).json(rows[0]);

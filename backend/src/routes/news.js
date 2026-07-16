@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
     let q = `SELECT a.*, json_object_agg(t.locale, json_build_object('title',t.title,'excerpt',t.excerpt,'body',t.body)) as translations
              FROM news_articles a
              LEFT JOIN news_translations t ON t.article_id = a.id
-             WHERE a.status = 'published'`;
+             WHERE (a.status = 'published' OR a.is_breaking = true)`;
     const vals = [];
     let i = 1;
     if (category) { q += ` AND a.category = $${i++}`; vals.push(category); }
@@ -19,6 +19,17 @@ router.get('/', async (req, res) => {
     q += ` GROUP BY a.id ORDER BY a.published_at DESC`;
     if (limit) { q += ` LIMIT $${i++}`; vals.push(Number(limit)); }
     const { rows } = await pool.query(q, vals);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/admin/all', authenticate, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.*, json_object_agg(COALESCE(t.locale,'en'), json_build_object('title',t.title,'excerpt',t.excerpt,'body',t.body)) as translations
+       FROM news_articles a LEFT JOIN news_translations t ON t.article_id = a.id
+       GROUP BY a.id ORDER BY a.created_at DESC`
+    );
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -38,18 +49,6 @@ router.get('/:slug', async (req, res) => {
 });
 
 router.use(authenticate);
-
-// Admin: get all articles including drafts
-router.get('/admin/all', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT a.*, json_object_agg(COALESCE(t.locale,'en'), json_build_object('title',t.title,'excerpt',t.excerpt,'body',t.body)) as translations
-       FROM news_articles a LEFT JOIN news_translations t ON t.article_id = a.id
-       GROUP BY a.id ORDER BY a.created_at DESC`
-    );
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 router.post('/', async (req, res) => {
   const { slug, category, sport_slug, author, author_avatar, image_url, image_alt, read_time, is_featured, is_trending, is_breaking, status, tags, translations } = req.body;

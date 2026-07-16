@@ -22,8 +22,8 @@ export function Footer() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
             {/* Brand */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl p-3 inline-block mb-4">
-                <ZTLogo size={40} />
+              <div className="inline-block mb-4">
+                <ZTLogo size={48} />
               </div>
               <p className="text-sm text-ink-400 leading-relaxed mb-4">
                 The leading digital platform for women's sports in Rwanda, expanding across East Africa.

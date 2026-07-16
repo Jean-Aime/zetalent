@@ -5,6 +5,13 @@ import { Clock, Eye, Calendar, ArrowLeft, Share2, Bookmark, Tag, Loader2 } from 
 import { Reveal } from '../../components/common/NewsCard';
 import { api } from '../../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+function proxyUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
+}
+
 interface Article {
   id: string; slug: string; category: string; sport_slug: string;
   author: string; author_avatar: string; image_url: string; image_alt: string;
@@ -14,9 +21,51 @@ interface Article {
   translations: Record<string, { title: string; excerpt: string; body: string }>;
 }
 
-function getTitle(a: Article) { return a.translations?.en?.title || a.slug; }
-function getExcerpt(a: Article) { return a.translations?.en?.excerpt || ''; }
-function getBody(a: Article) { return a.translations?.en?.body || ''; }
+function getBestLocale(a: Article) {
+  const locales = ['en', 'fr', 'rw'] as const;
+  return locales.find(l => a.translations?.[l]?.title?.trim()) ?? 'en';
+}
+function getTitle(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.title || a.slug; }
+function getExcerpt(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.excerpt || ''; }
+function getBody(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.body || ''; }
+
+function renderInline(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('_') && part.endsWith('_')) return <em key={i}>{part.slice(1, -1)}</em>;
+    return part;
+  });
+}
+
+function renderBody(body: string) {
+  const lines = body.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imgMatch) {
+      const [, caption, url] = imgMatch;
+      elements.push(
+        <figure key={i} className="my-6">
+          <img src={proxyUrl(url)} alt={caption} className="w-full rounded-xl object-cover max-h-96" loading="lazy" />
+          {caption && <figcaption className="mt-2 text-center text-sm italic text-ink-400 dark:text-ink-500">{caption}</figcaption>}
+        </figure>
+      );
+    } else if (line.trim()) {
+      elements.push(
+        <motion.p key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }} transition={{ duration: 0.5, delay: Math.min(i * 0.04, 0.4) }}
+          className="text-base sm:text-lg text-ink-700 dark:text-ink-200 leading-[1.8] mb-6">
+          {renderInline(line)}
+        </motion.p>
+      );
+    }
+    i++;
+  }
+  return elements;
+}
 
 export function ArticlePage() {
   const { slug } = useParams();
@@ -25,14 +74,12 @@ export function ArticlePage() {
 
   useEffect(() => {
     if (!slug) return;
-    // fetch by slug from public news endpoint
-    api.getNews().then(all => {
-      const found = all.find((a: Article) => a.slug === slug) || null;
-      setArticle(found);
-      if (found) {
+    Promise.all([api.getArticleBySlug(slug), api.getNews()])
+      .then(([found, all]) => {
+        setArticle(found);
         setRelated(all.filter((a: Article) => a.id !== found.id && a.sport_slug === found.sport_slug).slice(0, 3));
-      }
-    }).catch(() => setArticle(null));
+      })
+      .catch(() => setArticle(null));
   }, [slug]);
 
   if (article === undefined) {
@@ -40,13 +87,13 @@ export function ArticlePage() {
   }
   if (article === null) return <Navigate to="/news" replace />;
 
-  const paragraphs = getBody(article).split('\n').filter(p => p.trim());
+  const body = getBody(article);
 
   return (
     <article className="pb-16">
       {/* Hero */}
       <div className="relative h-[60vh] min-h-[420px] overflow-hidden bg-ink-950">
-        {article.image_url && <img src={article.image_url} alt={article.image_alt} className="absolute inset-0 h-full w-full object-cover" />}
+        {article.image_url && <img src={proxyUrl(article.image_url)} alt={article.image_alt} className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/50 to-ink-950/20" />
         <div className="absolute inset-0 flex items-end">
           <div className="container-zt w-full pb-12">
@@ -74,7 +121,7 @@ export function ArticlePage() {
             <Reveal>
               <div className="flex flex-wrap items-center gap-4 pb-6 mb-6 border-b border-ink-100 dark:border-ink-700">
                 <div className="flex items-center gap-3">
-                  {article.author_avatar && <img src={article.author_avatar} alt={article.author} className="h-12 w-12 rounded-full object-cover" />}
+                  {article.author_avatar && <img src={proxyUrl(article.author_avatar)} alt={article.author} className="h-12 w-12 rounded-full object-cover" />}
                   <div>
                     <p className="font-semibold text-ink-900 dark:text-white">{article.author}</p>
                     <div className="flex items-center gap-3 text-xs text-ink-400">
@@ -102,13 +149,7 @@ export function ArticlePage() {
 
             {/* Body */}
             <div className="prose prose-lg dark:prose-invert max-w-none">
-              {paragraphs.length > 0 ? paragraphs.map((para, i) => (
-                <motion.p key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }} transition={{ duration: 0.5, delay: i * 0.04 }}
-                  className="text-base sm:text-lg text-ink-700 dark:text-ink-200 leading-[1.8] mb-6">
-                  {para}
-                </motion.p>
-              )) : (
+              {body.trim() ? renderBody(body) : (
                 <p className="text-ink-400 italic">Full article content coming soon.</p>
               )}
             </div>
@@ -133,7 +174,7 @@ export function ArticlePage() {
                   {related.map((a, i) => (
                     <Reveal key={a.id} delay={i * 0.1}>
                       <Link to={`/news/${a.slug}`} className="group flex flex-col card-zt overflow-hidden hover-lift">
-                        {a.image_url && <img src={a.image_url} alt={getTitle(a)} className="h-36 w-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />}
+                        {a.image_url && <img src={proxyUrl(a.image_url)} alt={getTitle(a)} className="h-36 w-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />}
                         <div className="p-4">
                           <h4 className="font-semibold text-sm text-ink-800 dark:text-ink-100 group-hover:text-gold-400 transition-colors line-clamp-2">{getTitle(a)}</h4>
                           <p className="text-xs text-ink-400 mt-1">{new Date(a.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
