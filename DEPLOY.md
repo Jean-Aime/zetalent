@@ -1,133 +1,187 @@
-# ZeTalent — Deployment Guide
+# ZeTalent — VPS Deployment Guide
+# Server: server1.streamoova.com (209.74.72.59)
+# Repo:   https://github.com/Jean-Aime/zetalent.git
 
-## Stack
-- **Frontend**: React + Vite (static files → cPanel public_html)
-- **Backend**: Node.js + Express + PostgreSQL (Node.js App on cPanel)
+=======================================================================
+PART 1 — CPANEL: CREATE POSTGRESQL DATABASE
+=======================================================================
 
----
+1. Login to cPanel: https://server1.streamoova.com:2083
+2. Go to: PostgreSQL Databases
+3. Create Database:    zetalent_db
+4. Create DB User:     zetalent_user   (set a strong password)
+5. Add user to DB:     Grant ALL PRIVILEGES
+6. Note down:
+   - DB_NAME     = <cpanel_prefix>_zetalent_db   (cPanel prefixes with your username)
+   - DB_USER     = <cpanel_prefix>_zetalent_user
+   - DB_PASSWORD = (what you set)
+   - DB_HOST     = localhost
+   - DB_PORT     = 5432
 
-## 1. GitHub Push (local machine)
+=======================================================================
+PART 2 — CPANEL: SETUP NODE.JS APP
+=======================================================================
 
-```bash
-git add .
-git commit -m "deploy: production build"
-git push origin main
-```
+1. cPanel → Setup Node.js App → Create Application
+   - Node.js version:      18.x  (or 20.x)
+   - Application mode:     Production
+   - Application root:     zetalent          ← folder in your home dir
+   - Application URL:      yourdomain.com    ← your actual domain
+   - Application startup:  backend/src/index.js
 
----
+2. Click CREATE — cPanel will create ~/zetalent folder
 
-## 2. Backend — Namecheap VPS / cPanel Node.js App
+=======================================================================
+PART 3 — SSH: CLONE REPO & INSTALL
+=======================================================================
 
-### In cPanel → Setup Node.js App:
-| Field | Value |
-|---|---|
-| Node.js version | 18.x or 20.x |
-| Application mode | Production |
-| Application root | `/home/<user>/zetalent` |
-| Application URL | `yourdomain.com` |
-| Application startup file | `backend/src/index.js` |
+SSH into your VPS:
+  ssh <your_cpanel_username>@209.74.72.59
+  OR use cPanel → Terminal
 
-### Steps:
-1. SSH into your VPS or use cPanel Terminal
-2. Clone the repo:
-   ```bash
-   git clone https://github.com/Jean-Aime/zetalent.git
-   cd zetalent
-   ```
-3. Install backend dependencies:
-   ```bash
-   cd backend && npm install --production
-   ```
-4. Create backend `.env` from example:
-   ```bash
-   cp .env.example .env
-   nano .env   # fill in real values
-   ```
-   Set these values:
-   ```
-   PORT=4000
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=zetalent
-   DB_USER=your_cpanel_db_user
-   DB_PASSWORD=your_db_password
-   JWT_SECRET=generate_a_long_random_string
-   FRONTEND_URL=https://yourdomain.com
-   ```
-5. Run DB migrations:
-   ```bash
-   node migrate.js
-   ```
-6. Create admin user:
-   ```bash
-   node seed-admin.js
-   ```
-7. Start the app via cPanel Node.js App manager (click "Run NPM Install" then "Start")
+Run these commands ONE BY ONE:
 
----
+# Go to the app folder cPanel created
+cd ~/zetalent
 
-## 3. Frontend — Build & Upload to cPanel
+# Clone the repo INTO this folder
+git init
+git remote add origin https://github.com/Jean-Aime/zetalent.git
+git pull origin main
 
-### On your local machine:
+# Install backend dependencies
+cd backend
+npm install --production
+cd ..
 
-1. Set production API URL in `frontend/.env`:
-   ```
-   VITE_API_URL=https://yourdomain.com/api
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your_anon_key
-   ```
+# Create the .env file
+cat > backend/.env << 'EOF'
+PORT=4000
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=REPLACE_WITH_CPANEL_DB_NAME
+DB_USER=REPLACE_WITH_CPANEL_DB_USER
+DB_PASSWORD=REPLACE_WITH_YOUR_DB_PASSWORD
+JWT_SECRET=REPLACE_WITH_LONG_RANDOM_STRING_MIN_32_CHARS
+JWT_EXPIRES_IN=7d
+FRONTEND_URL=https://REPLACE_WITH_YOUR_DOMAIN.com
+EOF
+
+# Edit the .env with real values:
+nano backend/.env
+
+# Run database migrations
+cd backend
+node migrate.js
+
+# Seed the admin user
+node seed-admin.js
+cd ..
+
+=======================================================================
+PART 4 — CPANEL: START THE NODE.JS APP
+=======================================================================
+
+1. cPanel → Setup Node.js App
+2. Find your app → click the pencil (Edit) icon
+3. Click "Run NPM Install"
+4. Click "Start App"
+5. The app should show status: RUNNING on port 4000
+
+Test it:
+  curl http://localhost:4000/api/health
+  → should return: {"status":"ok"}
+
+=======================================================================
+PART 5 — FRONTEND: BUILD WITH PRODUCTION API URL
+=======================================================================
+
+On your LOCAL machine (Windows):
+
+1. Edit frontend/.env:
+   VITE_API_URL=https://YOURDOMAIN.com/api
+   VITE_SUPABASE_URL=https://drjhesyheyywwrtzhfrt.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
 2. Build:
-   ```bash
    cd frontend
    npm run build
-   ```
-3. Upload the entire `frontend/dist/` folder contents to `public_html/` via cPanel File Manager or FTP.
-   - The `.htaccess` is already included (copied from `public/` during build).
 
----
+3. The built files are in: frontend/dist/
 
-## 4. Backend API Proxy (Nginx or Apache)
+=======================================================================
+PART 6 — CPANEL: UPLOAD FRONTEND TO public_html
+=======================================================================
 
-If your backend runs on port 4000, proxy `/api` through your domain:
+Option A — File Manager (easiest):
+1. Zip the contents of frontend/dist/ (NOT the dist folder, its contents)
+2. cPanel → File Manager → public_html
+3. Upload the zip → Extract here
+4. Make sure index.html and .htaccess are directly in public_html/
 
-### Apache `.htaccess` in `public_html/` (add to existing):
-```apache
-RewriteRule ^api/(.*)$ http://localhost:4000/api/$1 [P,L]
-```
-Or use cPanel's **Proxy** settings to forward `/api` → `http://localhost:4000/api`.
+Option B — FTP (FileZilla):
+  Host:     209.74.72.59
+  Username: your_cpanel_username
+  Password: your_cpanel_password
+  Port:     21
+  Upload contents of frontend/dist/ → /public_html/
 
-### Nginx (if VPS):
-```nginx
-location /api {
-    proxy_pass http://localhost:4000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-}
-location /uploads {
-    proxy_pass http://localhost:4000;
-}
-```
+=======================================================================
+PART 7 — APACHE PROXY: CONNECT /api TO NODE.JS PORT 4000
+=======================================================================
 
----
+In cPanel → File Manager → public_html → .htaccess
+ADD these lines at the TOP (before the React SPA rules):
 
-## 5. PostgreSQL on cPanel
-1. Go to cPanel → **PostgreSQL Databases**
-2. Create database: `zetalent`
-3. Create user and assign all privileges
-4. Update `.env` with those credentials
+  RewriteEngine On
 
----
+  # Proxy /api to Node.js backend on port 4000
+  RewriteCond %{REQUEST_URI} ^/api [NC]
+  RewriteRule ^api/(.*)$ http://localhost:4000/api/$1 [P,L]
 
-## 6. Updating (after code changes)
+  # Proxy /uploads to Node.js backend
+  RewriteCond %{REQUEST_URI} ^/uploads [NC]
+  RewriteRule ^uploads/(.*)$ http://localhost:4000/uploads/$1 [P,L]
 
-```bash
-# On VPS via SSH:
-cd zetalent
-git pull origin main
-cd backend && npm install --production
-# Restart Node.js app from cPanel or:
-pm2 restart all
-```
+  # React SPA — all other routes → index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [QSA,L]
 
-For frontend updates, rebuild locally and re-upload `dist/` to `public_html/`.
+NOTE: For [P] proxy to work, mod_proxy must be enabled on the server.
+If it's not, use cPanel → Node.js App → "Application URL" subdomain approach instead.
+
+=======================================================================
+PART 8 — VERIFY EVERYTHING WORKS
+=======================================================================
+
+1. Visit https://yourdomain.com              → React app loads
+2. Visit https://yourdomain.com/api/health   → {"status":"ok"}
+3. Visit https://yourdomain.com/news         → News page loads (React Router)
+4. Login at https://yourdomain.com/auth      → admin@zetalentmedia.com / 12@Zetalentmedia34?
+5. Visit https://yourdomain.com/admin        → Admin panel works
+
+=======================================================================
+PART 9 — UPDATING AFTER CODE CHANGES
+=======================================================================
+
+On VPS (SSH):
+  cd ~/zetalent
+  git pull origin main
+  cd backend && npm install --production
+  # Restart from cPanel Node.js App manager OR:
+  # Find the passenger restart file:
+  touch ~/zetalent/tmp/restart.txt
+
+For frontend changes (local machine):
+  cd frontend
+  npm run build
+  # Re-upload dist/ contents to public_html/
+
+=======================================================================
+ADMIN CREDENTIALS (change after first login!)
+=======================================================================
+  Email:    admin@zetalentmedia.com
+  Password: 12@Zetalentmedia34?
+
+=======================================================================
