@@ -27,8 +27,8 @@ const upload = multer({
 
 router.post('/', authenticate, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const host = `${req.protocol}://${req.get('host')}`;
-  res.json({ url: `${host}/uploads/${req.file.filename}` });
+  const base = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+  res.json({ url: `${base}/uploads/${req.file.filename}` });
 });
 
 module.exports = router;
