@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 function proxyUrl(url: string): string {
   if (!url) return url;
   if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  if (url.startsWith('https://zetalent-media.com') || url.startsWith('http://zetalent-media.com')) return url;
   return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
 }
 
@@ -26,45 +27,25 @@ function getBestLocale(a: Article) {
   return locales.find(l => a.translations?.[l]?.title?.trim()) ?? 'en';
 }
 function getTitle(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.title || a.slug; }
-function getExcerpt(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.excerpt || ''; }
+function getExcerpt(a: Article) {
+  const l = getBestLocale(a);
+  const raw = a.translations?.[l]?.excerpt || '';
+  return raw.replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
 function getBody(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.body || ''; }
 
-function renderInline(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('_') && part.endsWith('_')) return <em key={i}>{part.slice(1, -1)}</em>;
-    return part;
-  });
-}
+const OLD_SITE = 'https://zetalent-media.com';
 
-function renderBody(body: string) {
-  const lines = body.split('\n');
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (imgMatch) {
-      const [, caption, url] = imgMatch;
-      elements.push(
-        <figure key={i} className="my-6">
-          <img src={proxyUrl(url)} alt={caption} className="w-full rounded-xl object-cover max-h-96" loading="lazy" />
-          {caption && <figcaption className="mt-2 text-center text-sm italic text-ink-400 dark:text-ink-500">{caption}</figcaption>}
-        </figure>
-      );
-    } else if (line.trim()) {
-      elements.push(
-        <motion.p key={i} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }} transition={{ duration: 0.5, delay: Math.min(i * 0.04, 0.4) }}
-          className="text-base sm:text-lg text-ink-700 dark:text-ink-200 leading-[1.8] mb-6">
-          {renderInline(line)}
-        </motion.p>
-      );
-    }
-    i++;
-  }
-  return elements;
+function rewriteHtml(html: string): string {
+  // Decode HTML entities if double-encoded
+  const decoded = html
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&nbsp;/g, '\u00a0')
+    .replace(/&rsquo;/g, '\u2019').replace(/&lsquo;/g, '\u2018')
+    .replace(/&rdquo;/g, '\u201d').replace(/&ldquo;/g, '\u201c')
+    .replace(/&ndash;/g, '\u2013').replace(/&mdash;/g, '\u2014');
+  return decoded;
 }
 
 export function ArticlePage() {
@@ -149,7 +130,9 @@ export function ArticlePage() {
 
             {/* Body */}
             <div className="prose prose-lg dark:prose-invert max-w-none">
-              {body.trim() ? renderBody(body) : (
+              {body.trim() ? (
+                <div dangerouslySetInnerHTML={{ __html: rewriteHtml(body) }} />
+              ) : (
                 <p className="text-ink-400 italic">Full article content coming soon.</p>
               )}
             </div>

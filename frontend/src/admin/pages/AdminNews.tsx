@@ -32,6 +32,7 @@ function proxyUrl(url: string): string {
   if (!url) return url;
   const clean = sanitizeImageUrl(url);
   if (clean.startsWith('http://localhost') || clean.startsWith('http://127.0.0.1') || clean.startsWith('/')) return clean;
+  if (clean.startsWith('https://zetalent-media.com') || clean.startsWith('http://zetalent-media.com')) return clean;
   return `${API_BASE}/img-proxy?url=${encodeURIComponent(clean)}`;
 }
 

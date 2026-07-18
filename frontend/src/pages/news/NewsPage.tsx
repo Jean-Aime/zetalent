@@ -8,6 +8,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 function proxyUrl(url: string): string {
   if (!url) return url;
   if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  if (url.startsWith('https://zetalent-media.com') || url.startsWith('http://zetalent-media.com')) return url;
   return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
 }
 
@@ -31,7 +32,11 @@ function getBestLocale(a: Article) {
   return locales.find(l => a.translations?.[l]?.title?.trim()) ?? 'en';
 }
 function getTitle(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.title || a.slug; }
-function getExcerpt(a: Article) { const l = getBestLocale(a); return a.translations?.[l]?.excerpt || ''; }
+function getExcerpt(a: Article) {
+  const l = getBestLocale(a);
+  const raw = a.translations?.[l]?.excerpt || '';
+  return raw.replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
 
 export function NewsPage() {
   const [searchParams] = useSearchParams();
