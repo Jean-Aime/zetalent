@@ -91,11 +91,11 @@ export function Footer() {
                 </li>
                 <li className="flex items-center gap-3">
                   <Mail size={16} className="text-gold-400 shrink-0" />
-                  <a href="mailto:info@ztmedia.rw" className="text-ink-400 hover:text-gold-400 transition-colors">info@ztmedia.rw</a>
+                  <a href="mailto:zetalentmedia@gmail.com" className="text-ink-400 hover:text-gold-400 transition-colors">zetalentmedia@gmail.com</a>
                 </li>
                 <li className="flex items-center gap-3">
                   <Phone size={16} className="text-gold-400 shrink-0" />
-                  <a href="tel:+250788000000" className="text-ink-400 hover:text-gold-400 transition-colors">+250 788 000 000</a>
+                  <a href="tel:+250788822840" className="text-ink-400 hover:text-gold-400 transition-colors">+250 788 822 840</a>
                 </li>
               </ul>
               <Link to="/contact" className="btn-outline mt-5 !border-ink-600 !text-ink-300 hover:!border-gold-400 hover:!text-gold-400 text-sm">

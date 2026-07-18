@@ -8,6 +8,9 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 function proxyUrl(url: string): string {
   if (!url) return url;
   if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1') || url.startsWith('/')) return url;
+  if (url.startsWith('https://zetalent-media.com') || url.startsWith('http://zetalent-media.com')) return url;
+  // Skip proxy for x.com/twitter.com — they block hotlinking anyway
+  if (url.includes('x.com') || url.includes('twitter.com')) return url;
   return `${API_BASE}/img-proxy?url=${encodeURIComponent(url)}`;
 }
 
