@@ -104,20 +104,7 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Sponsors strip */}
-          <div className="mt-12 pt-8 border-t border-ink-800">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-ink-500 mb-4 text-center">Official Partners</p>
-            <div className="flex flex-wrap items-center justify-center gap-6">
-              {sponsors.slice(0, 6).map((s) => (
-                <div
-                  key={s.id}
-                  className="flex h-12 px-5 items-center justify-center rounded-lg bg-ink-800/60 border border-ink-700/50 text-ink-400 font-bold text-sm hover:border-gold-400/40 hover:text-gold-400 transition-all duration-300"
-                >
-                  {s.logoText}
-                </div>
-              ))}
-            </div>
-          </div>
+
         </div>
       </div>
 
