@@ -729,230 +729,195 @@ function RichBodyEditor({ value, onChange, placeholder, minRows = 12 }: {
   );
 }
 
+function ArticleModalLayout({ title, icon: Icon, topRight, error, onErrorClose, children }: {
+  title: string; icon: React.ElementType; topRight: React.ReactNode;
+  error: string | null; onErrorClose: () => void; children: React.ReactNode;
+}) {
+  return createPortal(
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-ink-950">
+      <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-ink-100 dark:border-ink-700/50 bg-white dark:bg-ink-900 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-400/10 shrink-0">
+            <Icon className="h-4 w-4 text-gold-500" />
+          </div>
+          <span className="font-display font-bold text-ink-900 dark:text-white text-sm sm:text-base truncate">{title}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">{topRight}</div>
+      </div>
+      {error && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-red-500/10 border-b border-red-500/20 text-sm text-red-600 dark:text-red-400 shrink-0">
+          <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          <button onClick={onErrorClose} className="ml-auto"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {children}
+    </motion.div>,
+    document.body
+  );
+}
+
+function ArticleForm({ form, localeTab, setLocaleTab, updateForm, updateTranslation, sports, saving, onSave, onCancel, submitLabel }: {
+  form: FormState; localeTab: Locale; setLocaleTab: (l: Locale) => void;
+  updateForm: (f: keyof FormState, v: unknown) => void;
+  updateTranslation: (locale: Locale, field: 'title' | 'excerpt' | 'body', value: string) => void;
+  sports: { id: string; slug: string; name: string }[];
+  saving: boolean; onSave: () => void; onCancel: () => void; submitLabel: string;
+}) {
+  const [showSettings, setShowSettings] = useState(false);
+  const t = form.translations[localeTab];
+
+  return (
+    <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+      {/* Writing area */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+        {/* Locale tabs */}
+        <div className="flex items-center gap-1 mb-5 flex-wrap">
+          <Globe className="h-4 w-4 text-ink-400 mr-1 shrink-0" />
+          {([{ key: 'en' as Locale, label: 'English' }, { key: 'fr' as Locale, label: 'Français' }, { key: 'rw' as Locale, label: 'Kinyarwanda' }]).map(l => (
+            <button key={l.key} onClick={() => setLocaleTab(l.key)}
+              className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors ${
+                localeTab === l.key ? 'bg-gold-400 text-ink-950' : 'bg-ink-100 dark:bg-ink-800 text-ink-500 hover:bg-ink-200 dark:hover:bg-ink-700'
+              }`}>{l.label}</button>
+          ))}
+          {/* Mobile settings toggle */}
+          <button onClick={() => setShowSettings(v => !v)}
+            className="ml-auto lg:hidden flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full bg-ink-100 dark:bg-ink-800 text-ink-500">
+            <Settings2 className="h-3.5 w-3.5" /> Settings
+          </button>
+        </div>
+
+        {/* Mobile settings panel */}
+        {showSettings && (
+          <div className="lg:hidden mb-5 rounded-xl border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-900 p-4 space-y-4">
+            <SettingsPanel form={form} updateForm={updateForm} sports={sports} />
+          </div>
+        )}
+
+        {/* Title */}
+        <input type="text" value={t.title} onChange={e => updateTranslation(localeTab, 'title', e.target.value)}
+          placeholder="Article title…"
+          className="w-full bg-transparent border-none outline-none font-display text-2xl sm:text-3xl font-bold text-ink-900 dark:text-white placeholder:text-ink-300 dark:placeholder:text-ink-600 py-2 mb-1" />
+        <p className="text-xs text-ink-400 mb-5">{t.title.length} chars</p>
+
+        {/* Excerpt */}
+        <label className="block text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Excerpt</label>
+        <AutoTextarea value={t.excerpt} onChange={v => updateTranslation(localeTab, 'excerpt', v)}
+          placeholder="Short summary shown in article cards…" minRows={2}
+          className="text-base text-ink-700 dark:text-ink-200 leading-relaxed mb-1" />
+        <p className="text-xs text-ink-400 mb-5">{wordCount(t.excerpt)} words</p>
+
+        {/* Body */}
+        <label className="block text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Body</label>
+        <RichBodyEditor value={t.body} onChange={v => updateTranslation(localeTab, 'body', v)} placeholder="Write your article here…" />
+        <p className="text-xs text-ink-400 mt-2">{wordCount(t.body)} words · ~{Math.ceil(wordCount(t.body) / 200)} min read</p>
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden lg:block w-72 shrink-0 border-l border-ink-100 dark:border-ink-700/50 overflow-y-auto bg-ink-50/50 dark:bg-ink-900/50">
+        <div className="p-5 space-y-5">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-400">
+            <Settings2 className="h-3.5 w-3.5" /> Article Settings
+          </div>
+          <SettingsPanel form={form} updateForm={updateForm} sports={sports} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel({ form, updateForm, sports }: {
+  form: FormState;
+  updateForm: (f: keyof FormState, v: unknown) => void;
+  sports: { id: string; slug: string; name: string }[];
+}) {
+  return (
+    <>
+      <div>
+        <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Status</label>
+        <select value={form.status} onChange={e => updateForm('status', e.target.value)} className="input-zt text-sm">
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Category</label>
+        <select value={form.category} onChange={e => updateForm('category', e.target.value)} className="input-zt text-sm">
+          {newsCategories.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Sport</label>
+        <select value={form.sport_slug} onChange={e => updateForm('sport_slug', e.target.value)} className="input-zt text-sm">
+          {sports.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Author</label>
+        <input type="text" value={form.author} onChange={e => updateForm('author', e.target.value)}
+          placeholder="Author name" className="input-zt text-sm" />
+      </div>
+      <CoverImagePicker value={form.image_url} onChange={url => updateForm('image_url', url)} />
+      <div>
+        <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-2">Flags</label>
+        <div className="space-y-2">
+          {([{ key: 'is_featured' as const, label: 'Featured', icon: Star },
+            { key: 'is_trending' as const, label: 'Trending', icon: TrendingUp },
+            { key: 'is_breaking' as const, label: 'Breaking', icon: Zap },
+          ]).map(item => {
+            const Icon = item.icon;
+            const checked = Boolean(form[item.key]);
+            return (
+              <button key={item.key} onClick={() => updateForm(item.key, !checked)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  checked ? 'bg-gold-400/15 text-gold-600 dark:text-gold-400 ring-1 ring-gold-400/30'
+                    : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-100 dark:hover:bg-ink-700 border border-ink-100 dark:border-ink-700/50'
+                }`}>
+                <Icon className="h-4 w-4" />
+                <span className="flex-1 text-left">{item.label}</span>
+                {checked && <Check className="h-3.5 w-3.5" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AddArticleModal({ initialSportSlug, sports, saving, onSave, onCancel }: AddArticleModalProps) {
   const [form, setForm] = useState<FormState>(() => ({ ...emptyForm(), sport_slug: initialSportSlug }));
   const [localeTab, setLocaleTab] = useState<Locale>('en');
   const [modalError, setModalError] = useState<string | null>(null);
 
-  const updateForm = (field: keyof FormState, value: unknown) =>
-    setForm(prev => ({ ...prev, [field]: value }));
-
+  const updateForm = (field: keyof FormState, value: unknown) => setForm(prev => ({ ...prev, [field]: value }));
   const updateTranslation = (locale: Locale, field: 'title' | 'excerpt' | 'body', value: string) =>
-    setForm(prev => ({
-      ...prev,
-      translations: { ...prev.translations, [locale]: { ...prev.translations[locale], [field]: value } },
-    }));
+    setForm(prev => ({ ...prev, translations: { ...prev.translations, [locale]: { ...prev.translations[locale], [field]: value } } }));
 
-  // lock body scroll
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
-
-  // Escape to close
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onCancel]);
+  useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, []);
+  useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onCancel]);
 
   const handleSave = async () => {
     setModalError(null);
-    const anyTitle = form.translations.en.title.trim() ||
-      form.translations.fr.title.trim() ||
-      form.translations.rw.title.trim();
-    if (!anyTitle) {
-      setModalError('Please enter a title in at least one language');
-      return;
+    if (!form.translations.en.title.trim() && !form.translations.fr.title.trim() && !form.translations.rw.title.trim()) {
+      setModalError('Please enter a title in at least one language'); return;
     }
-    try {
-      await onSave(form);
-    } catch (e: any) {
-      setModalError(e.message || 'Failed to publish article');
-    }
+    try { await onSave(form); } catch (e: any) { setModalError(e.message || 'Failed to publish article'); }
   };
 
-  const t = form.translations[localeTab];
-
-  return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-ink-950"
-    >
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-ink-100 dark:border-ink-700/50 bg-white dark:bg-ink-900 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-400/10">
-            <FileText className="h-4 w-4 text-gold-500" />
-          </div>
-          <span className="font-display font-bold text-ink-900 dark:text-white text-base">New Article</span>
-          <span className="text-xs text-ink-400 dark:text-ink-500 hidden sm:block">Press Esc to close</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onCancel} className="px-4 py-2 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Discard</button>
-          <button onClick={handleSave} disabled={saving} className="btn-gold text-sm">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Publish
-          </button>
-        </div>
-      </div>
-
-      {/* Modal-level error banner */}
-      {modalError && (
-        <div className="flex items-center gap-3 px-6 py-2.5 bg-red-500/10 border-b border-red-500/20 text-sm text-red-600 dark:text-red-400 shrink-0">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {modalError}
-          <button onClick={() => setModalError(null)} className="ml-auto"><X className="h-4 w-4" /></button>
-        </div>
-      )}
-
-      {/* ── Body: two-column layout ── */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* Left: writing area */}
-        <div className="flex-1 overflow-y-auto px-8 py-8 max-w-3xl mx-auto w-full">
-
-          {/* Locale tabs */}
-          <div className="flex items-center gap-1 mb-6">
-            <Globe className="h-4 w-4 text-ink-400 mr-1" />
-            {([{ key: 'en' as Locale, label: 'English' }, { key: 'fr' as Locale, label: 'Français' }, { key: 'rw' as Locale, label: 'Kinyarwanda' }]).map(l => (
-              <button key={l.key} onClick={() => setLocaleTab(l.key)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-full transition-colors ${
-                  localeTab === l.key
-                    ? 'bg-gold-400 text-ink-950'
-                    : 'bg-ink-100 dark:bg-ink-800 text-ink-500 hover:bg-ink-200 dark:hover:bg-ink-700'
-                }`}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Title */}
-          <div className="mb-1">
-            <input
-              type="text"
-              value={t.title}
-              onChange={e => updateTranslation(localeTab, 'title', e.target.value)}
-              placeholder="Article title…"
-              className="w-full bg-transparent border-none outline-none font-display text-3xl font-bold text-ink-900 dark:text-white placeholder:text-ink-300 dark:placeholder:text-ink-600 py-2"
-            />
-          </div>
-          <div className="flex items-center gap-3 mb-6 text-xs text-ink-400">
-            <span>{t.title.length} chars</span>
-          </div>
-
-          {/* Excerpt */}
-          <div className="mb-1">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Excerpt</label>
-            <AutoTextarea
-              value={t.excerpt}
-              onChange={v => updateTranslation(localeTab, 'excerpt', v)}
-              placeholder="Short summary shown in article cards…"
-              minRows={2}
-              className="text-base text-ink-700 dark:text-ink-200 leading-relaxed"
-            />
-          </div>
-          <div className="flex items-center gap-3 mb-6 text-xs text-ink-400">
-            <span>{wordCount(t.excerpt)} words</span>
-          </div>
-
-          {/* Body */}
-          <div className="mb-1">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Body</label>
-            <RichBodyEditor
-              value={t.body}
-              onChange={v => updateTranslation(localeTab, 'body', v)}
-              placeholder="Write your article here…"
-            />
-          </div>
-          <div className="flex items-center gap-3 text-xs text-ink-400">
-            <span>{wordCount(t.body)} words</span>
-            <span>·</span>
-            <span>~{Math.ceil(wordCount(t.body) / 200)} min read</span>
-          </div>
-        </div>
-
-        {/* Right: sidebar */}
-        <div className="w-72 shrink-0 border-l border-ink-100 dark:border-ink-700/50 overflow-y-auto bg-ink-50/50 dark:bg-ink-900/50">
-          <div className="p-5 space-y-5">
-
-            {/* Settings header */}
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-400">
-              <Settings2 className="h-3.5 w-3.5" /> Article Settings
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Status</label>
-              <select value={form.status} onChange={e => updateForm('status', e.target.value)} className="input-zt text-sm">
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
-              </select>
-            </div>
-
-            {/* Category */}
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Category</label>
-              <select value={form.category} onChange={e => updateForm('category', e.target.value)} className="input-zt text-sm">
-                {newsCategories.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-              </select>
-            </div>
-
-            {/* Sport */}
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Sport</label>
-              <select value={form.sport_slug} onChange={e => updateForm('sport_slug', e.target.value)} className="input-zt text-sm">
-                {sports.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
-              </select>
-            </div>
-
-            {/* Author */}
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Author</label>
-              <input type="text" value={form.author} onChange={e => updateForm('author', e.target.value)}
-                placeholder="Author name" className="input-zt text-sm" />
-            </div>
-
-            {/* Cover Image */}
-            <CoverImagePicker
-              value={form.image_url}
-              onChange={url => updateForm('image_url', url)}
-            />
-
-            {/* Flags */}
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-2">Flags</label>
-              <div className="space-y-2">
-                {([
-                  { key: 'is_featured' as const, label: 'Featured', icon: Star },
-                  { key: 'is_trending' as const, label: 'Trending', icon: TrendingUp },
-                  { key: 'is_breaking' as const, label: 'Breaking', icon: Zap },
-                ]).map(item => {
-                  const Icon = item.icon;
-                  const checked = Boolean(form[item.key]);
-                  return (
-                    <button key={item.key} onClick={() => updateForm(item.key, !checked)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                        checked
-                          ? 'bg-gold-400/15 text-gold-600 dark:text-gold-400 ring-1 ring-gold-400/30'
-                          : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-100 dark:hover:bg-ink-700 border border-ink-100 dark:border-ink-700/50'
-                      }`}>
-                      <Icon className="h-4 w-4" />
-                      <span className="flex-1 text-left">{item.label}</span>
-                      {checked && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-    </motion.div>,
-    document.body
+  return (
+    <ArticleModalLayout title="New Article" icon={FileText}
+      topRight={<>
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Discard</button>
+        <button onClick={handleSave} disabled={saving} className="btn-gold text-sm">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Publish
+        </button>
+      </>}
+      error={modalError} onErrorClose={() => setModalError(null)}>
+      <ArticleForm form={form} localeTab={localeTab} setLocaleTab={setLocaleTab}
+        updateForm={updateForm} updateTranslation={updateTranslation}
+        sports={sports} saving={saving} onSave={handleSave} onCancel={onCancel} submitLabel="Publish" />
+    </ArticleModalLayout>
   );
 }
 
@@ -971,191 +936,33 @@ function EditArticleModal({ initial, sports, saving, onSave, onCancel }: EditArt
   const [localeTab, setLocaleTab] = useState<Locale>('en');
   const [modalError, setModalError] = useState<string | null>(null);
 
-  const updateForm = (field: keyof FormState, value: unknown) =>
-    setForm(prev => ({ ...prev, [field]: value }));
-
+  const updateForm = (field: keyof FormState, value: unknown) => setForm(prev => ({ ...prev, [field]: value }));
   const updateTranslation = (locale: Locale, field: 'title' | 'excerpt' | 'body', value: string) =>
-    setForm(prev => ({
-      ...prev,
-      translations: { ...prev.translations, [locale]: { ...prev.translations[locale], [field]: value } },
-    }));
+    setForm(prev => ({ ...prev, translations: { ...prev.translations, [locale]: { ...prev.translations[locale], [field]: value } } }));
 
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onCancel]);
+  useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, []);
+  useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onCancel]);
 
   const handleSave = async () => {
     setModalError(null);
-    const anyTitle = form.translations.en.title.trim() ||
-      form.translations.fr.title.trim() ||
-      form.translations.rw.title.trim();
-    if (!anyTitle) {
-      setModalError('Please enter a title in at least one language');
-      return;
+    if (!form.translations.en.title.trim() && !form.translations.fr.title.trim() && !form.translations.rw.title.trim()) {
+      setModalError('Please enter a title in at least one language'); return;
     }
-    try {
-      await onSave(form);
-    } catch (e: any) {
-      setModalError(e.message || 'Failed to update article');
-    }
+    try { await onSave(form); } catch (e: any) { setModalError(e.message || 'Failed to update article'); }
   };
 
-  const t = form.translations[localeTab];
-
-  return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-ink-950"
-    >
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-ink-100 dark:border-ink-700/50 bg-white dark:bg-ink-900 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-400/10">
-            <Edit3 className="h-4 w-4 text-gold-500" />
-          </div>
-          <span className="font-display font-bold text-ink-900 dark:text-white text-base">Edit Article</span>
-          <span className="text-xs text-ink-400 dark:text-ink-500 hidden sm:block">Press Esc to close</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onCancel} className="px-4 py-2 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Discard</button>
-          <button onClick={handleSave} disabled={saving} className="btn-gold text-sm">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Update
-          </button>
-        </div>
-      </div>
-
-      {modalError && (
-        <div className="flex items-center gap-3 px-6 py-2.5 bg-red-500/10 border-b border-red-500/20 text-sm text-red-600 dark:text-red-400 shrink-0">
-          <AlertCircle className="h-4 w-4 shrink-0" /> {modalError}
-          <button onClick={() => setModalError(null)} className="ml-auto"><X className="h-4 w-4" /></button>
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: writing area */}
-        <div className="flex-1 overflow-y-auto px-8 py-8 max-w-3xl mx-auto w-full">
-          <div className="flex items-center gap-1 mb-6">
-            <Globe className="h-4 w-4 text-ink-400 mr-1" />
-            {([{ key: 'en' as Locale, label: 'English' }, { key: 'fr' as Locale, label: 'Français' }, { key: 'rw' as Locale, label: 'Kinyarwanda' }]).map(l => (
-              <button key={l.key} onClick={() => setLocaleTab(l.key)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-full transition-colors ${
-                  localeTab === l.key ? 'bg-gold-400 text-ink-950' : 'bg-ink-100 dark:bg-ink-800 text-ink-500 hover:bg-ink-200 dark:hover:bg-ink-700'
-                }`}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mb-1">
-            <input type="text" value={t.title}
-              onChange={e => updateTranslation(localeTab, 'title', e.target.value)}
-              placeholder="Article title…"
-              className="w-full bg-transparent border-none outline-none font-display text-3xl font-bold text-ink-900 dark:text-white placeholder:text-ink-300 dark:placeholder:text-ink-600 py-2"
-            />
-          </div>
-          <div className="flex items-center gap-3 mb-6 text-xs text-ink-400">
-            <span>{t.title.length} chars</span>
-          </div>
-
-          <div className="mb-1">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Excerpt</label>
-            <AutoTextarea value={t.excerpt} onChange={v => updateTranslation(localeTab, 'excerpt', v)}
-              placeholder="Short summary shown in article cards…" minRows={2}
-              className="text-base text-ink-700 dark:text-ink-200 leading-relaxed" />
-          </div>
-          <div className="flex items-center gap-3 mb-6 text-xs text-ink-400">
-            <span>{wordCount(t.excerpt)} words</span>
-          </div>
-
-          <div className="mb-1">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500 mb-2">Body</label>
-            <RichBodyEditor value={t.body} onChange={v => updateTranslation(localeTab, 'body', v)}
-              placeholder="Write your article here…" />
-          </div>
-          <div className="flex items-center gap-3 text-xs text-ink-400">
-            <span>{wordCount(t.body)} words</span>
-            <span>·</span>
-            <span>~{Math.ceil(wordCount(t.body) / 200)} min read</span>
-          </div>
-        </div>
-
-        {/* Right: sidebar */}
-        <div className="w-72 shrink-0 border-l border-ink-100 dark:border-ink-700/50 overflow-y-auto bg-ink-50/50 dark:bg-ink-900/50">
-          <div className="p-5 space-y-5">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-400">
-              <Settings2 className="h-3.5 w-3.5" /> Article Settings
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Status</label>
-              <select value={form.status} onChange={e => updateForm('status', e.target.value)} className="input-zt text-sm">
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Category</label>
-              <select value={form.category} onChange={e => updateForm('category', e.target.value)} className="input-zt text-sm">
-                {newsCategories.map(c => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Sport</label>
-              <select value={form.sport_slug} onChange={e => updateForm('sport_slug', e.target.value)} className="input-zt text-sm">
-                {sports.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Author</label>
-              <input type="text" value={form.author} onChange={e => updateForm('author', e.target.value)}
-                placeholder="Author name" className="input-zt text-sm" />
-            </div>
-
-            <CoverImagePicker value={form.image_url} onChange={url => updateForm('image_url', url)} />
-
-            <div>
-              <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-2">Flags</label>
-              <div className="space-y-2">
-                {([
-                  { key: 'is_featured' as const, label: 'Featured', icon: Star },
-                  { key: 'is_trending' as const, label: 'Trending', icon: TrendingUp },
-                  { key: 'is_breaking' as const, label: 'Breaking', icon: Zap },
-                ]).map(item => {
-                  const Icon = item.icon;
-                  const checked = Boolean(form[item.key]);
-                  return (
-                    <button key={item.key} onClick={() => updateForm(item.key, !checked)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                        checked
-                          ? 'bg-gold-400/15 text-gold-600 dark:text-gold-400 ring-1 ring-gold-400/30'
-                          : 'bg-white dark:bg-ink-800 text-ink-500 hover:bg-ink-100 dark:hover:bg-ink-700 border border-ink-100 dark:border-ink-700/50'
-                      }`}>
-                      <Icon className="h-4 w-4" />
-                      <span className="flex-1 text-left">{item.label}</span>
-                      {checked && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>,
-    document.body
+  return (
+    <ArticleModalLayout title="Edit Article" icon={Edit3}
+      topRight={<>
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Discard</button>
+        <button onClick={handleSave} disabled={saving} className="btn-gold text-sm">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Update
+        </button>
+      </>}
+      error={modalError} onErrorClose={() => setModalError(null)}>
+      <ArticleForm form={form} localeTab={localeTab} setLocaleTab={setLocaleTab}
+        updateForm={updateForm} updateTranslation={updateTranslation}
+        sports={sports} saving={saving} onSave={handleSave} onCancel={onCancel} submitLabel="Update" />
+    </ArticleModalLayout>
   );
 }
