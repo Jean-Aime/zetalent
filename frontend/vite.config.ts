@@ -12,11 +12,11 @@ export default defineConfig({
       'Content-Security-Policy':
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://platform.twitter.com https://cdn.syndication.twimg.com; " +
-        "frame-src https://platform.twitter.com https://syndication.twitter.com https://twitter.com https://x.com; " +
-        "connect-src 'self' http://localhost:4000 https://api.twitter.com https://syndication.twitter.com; " +
-        "img-src 'self' data: blob: http://localhost:4000 https: ; " +
-        "style-src 'self' 'unsafe-inline' https://platform.twitter.com; " +
-        "font-src 'self' data: https:;",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://platform.twitter.com; " +
+        "font-src 'self' data: https://fonts.gstatic.com; " +
+        "connect-src 'self' http://localhost:4000 https://zetalent-media.com https://api.twitter.com https://syndication.twitter.com https://drjhesyheyywwrtzhfrt.supabase.co; " +
+        "img-src 'self' data: blob: http://localhost:4000 https:; " +
+        "frame-src https://platform.twitter.com https://syndication.twitter.com https://twitter.com https://x.com;",
     },
   },
   build: {
