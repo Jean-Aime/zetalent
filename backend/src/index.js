@@ -114,6 +114,55 @@ app.get('/api/img-proxy', async (req, res) => {
   }
 });
 
+// ── OG / social-crawler meta page ──
+const pool = require('./db/pool');
+app.get('/og/news/:slug', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.image_url, a.image_alt,
+              json_object_agg(t.locale, json_build_object('title',t.title,'excerpt',t.excerpt)) as translations
+       FROM news_articles a LEFT JOIN news_translations t ON t.article_id = a.id
+       WHERE a.slug = $1 GROUP BY a.id`,
+      [req.params.slug]
+    );
+    const article = rows[0];
+    const SITE = process.env.FRONTEND_URL || 'https://zetalent-media.com';
+    const url = `${SITE}/news/${req.params.slug}`;
+    let title = 'ZeTalent Media';
+    let description = 'The digital home of women\'s sports in Rwanda and East Africa.';
+    let image = `${SITE}/logo.jpeg`;
+    if (article) {
+      const t = article.translations;
+      const locale = ['en','fr','rw'].find(l => t?.[l]?.title?.trim()) || 'en';
+      title = t?.[locale]?.title || title;
+      description = (t?.[locale]?.excerpt || description).replace(/<[^>]+>/g, '').slice(0, 200);
+      if (article.image_url) image = article.image_url;
+    }
+    const esc = (s) => s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!doctype html><html><head>
+<meta charset="UTF-8" />
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="${esc(url)}" />
+<meta property="og:title" content="${esc(title)}" />
+<meta property="og:description" content="${esc(description)}" />
+<meta property="og:image" content="${esc(image)}" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:site_name" content="ZeTalent Media" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${esc(title)}" />
+<meta name="twitter:description" content="${esc(description)}" />
+<meta name="twitter:image" content="${esc(image)}" />
+<meta http-equiv="refresh" content="0;url=${esc(url)}" />
+</head><body><a href="${esc(url)}">Read article</a></body></html>`);
+  } catch (err) {
+    res.status(500).send('Error');
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
 app.use((err, _req, res, _next) => {
