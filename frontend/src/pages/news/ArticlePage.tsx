@@ -37,7 +37,6 @@ function getBody(a: Article) { const l = getBestLocale(a); return a.translations
 const OLD_SITE = 'https://zetalent-media.com';
 
 function rewriteHtml(html: string): string {
-  // Decode HTML entities if double-encoded
   const decoded = html
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
@@ -45,7 +44,20 @@ function rewriteHtml(html: string): string {
     .replace(/&rsquo;/g, '\u2019').replace(/&lsquo;/g, '\u2018')
     .replace(/&rdquo;/g, '\u201d').replace(/&ldquo;/g, '\u201c')
     .replace(/&ndash;/g, '\u2013').replace(/&mdash;/g, '\u2014');
-  return decoded;
+  // Convert markdown images ![alt](url) to <img> tags
+  const withImgs = decoded.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
+    `<img src="${proxyUrl(src)}" alt="${alt}" style="max-width:100%;height:auto;margin:1rem 0;" />`
+  );
+  // Wrap plain text paragraphs (non-HTML lines) in <p> tags
+  if (!withImgs.trim().startsWith('<')) {
+    return withImgs.split(/\n{2,}/).map(p => {
+      const t = p.trim();
+      if (!t) return '';
+      if (t.startsWith('<')) return t;
+      return `<p>${t.replace(/\n/g, '<br />')}</p>`;
+    }).join('\n');
+  }
+  return withImgs;
 }
 
 export function ArticlePage() {
