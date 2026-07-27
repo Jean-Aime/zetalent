@@ -197,5 +197,4 @@ Unauthorized use will be subject to legal action.
 | | |
 |---|---|
 | Website | [zetalent-media.com](https://zetalent-media.com) |
-| Email | zetalentmedia@gmail.com |
-| Phone | +250 788 822 840 |
+| Email | baraime450@gmail.com |
