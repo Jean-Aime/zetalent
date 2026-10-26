@@ -56,6 +56,7 @@ const S = (C: React.ComponentType) => (
 function PageTracker() {
   const { pathname } = useLocation();
   useEffect(() => {
+    if (pathname.startsWith('/private/')) return;
     // fire-and-forget, never block the UI
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/analytics/track`, {
       method: 'POST',
@@ -77,6 +78,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/news" element={S(NewsPage)} />
+              <Route path="/private/:token" element={S(ArticlePage)} />
               <Route path="/news/:slug" element={S(ArticlePage)} />
               <Route path="/sports" element={S(SportsIndex)} />
               <Route path="/sports/:slug" element={S(SportDetail)} />

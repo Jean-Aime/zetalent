@@ -85,6 +85,7 @@ export const api = {
     return request<any[]>(`/news${q ? `?${q}` : ''}`);
   },
   getArticleBySlug: (slug: string) => request<any>(`/news/${slug}`),
+  getPrivateArticle: (token: string) => request<any>(`/news/private/${token}`),
   getAdminNews: () => request<any[]>('/news/admin/all'),
   createArticle: (data: object) => request('/news', { method: 'POST', body: JSON.stringify(data) }),
   updateArticle: (id: string, data: object) => request(`/news/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

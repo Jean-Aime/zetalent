@@ -4,10 +4,17 @@ const bcrypt = require('bcryptjs');
 const pool = require('./src/db/pool');
 
 async function seed() {
-  const email = 'admin@zetalentmedia.com';
-  const password = '12@Zetalentmedia34?';
-  const name = 'ZeTalent Admin';
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  const name = process.env.ADMIN_NAME || 'ZeTalent Admin';
   const role = 'super_admin';
+
+  if (!email || !password) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set');
+  }
+  if (password.length < 12) {
+    throw new Error('ADMIN_PASSWORD must be at least 12 characters long');
+  }
 
   const hash = await bcrypt.hash(password, 12);
 
@@ -18,8 +25,7 @@ async function seed() {
     [email, name, role, hash]
   );
 
-  console.log(`Admin user seeded: ${email} / ${password}`);
-  console.log('IMPORTANT: Change this password after first login!');
+  console.log(`Admin user seeded: ${email}`);
   await pool.end();
 }
 

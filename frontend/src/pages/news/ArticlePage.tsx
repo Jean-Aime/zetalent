@@ -122,11 +122,28 @@ function rewriteHtml(html: string): string {
 }
 
 export function ArticlePage() {
-  const { slug } = useParams();
+  const { slug, token } = useParams();
   const [article, setArticle] = useState<Article | null | undefined>(undefined);
   const [related, setRelated] = useState<Article[]>([]);
 
   useEffect(() => {
+    if (!token) return;
+    const robots = document.createElement('meta');
+    robots.name = 'robots';
+    robots.content = 'noindex, nofollow';
+    document.head.appendChild(robots);
+    return () => robots.remove();
+  }, [token]);
+
+  useEffect(() => {
+    setArticle(undefined);
+    setRelated([]);
+    if (token) {
+      api.getPrivateArticle(token)
+        .then(found => { setArticle(found); setRelated([]); })
+        .catch(() => setArticle(null));
+      return;
+    }
     if (!slug) return;
     Promise.all([api.getArticleBySlug(slug), api.getNews()])
       .then(([found, all]) => {
@@ -134,7 +151,7 @@ export function ArticlePage() {
         setRelated(all.filter((a: Article) => a.id !== found.id && a.sport_slug === found.sport_slug).slice(0, 3));
       })
       .catch(() => setArticle(null));
-  }, [slug]);
+  }, [slug, token]);
 
   if (article === undefined) {
     return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-10 w-10 animate-spin text-gold-400" /></div>;
@@ -142,6 +159,9 @@ export function ArticlePage() {
   if (article === null) return <Navigate to="/news" replace />;
 
   const body = getBody(article);
+  const articleUrl = token
+    ? `${window.location.origin}/private/${token}`
+    : `${window.location.origin}/news/${article.slug}`;
 
   return (
     <article className="pb-16">
@@ -186,7 +206,7 @@ export function ArticlePage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
-                  <ShareButton url={`https://zetalent-media.com/news/${article.slug}`} title={getTitle(article)} />
+                  <ShareButton url={articleUrl} title={getTitle(article)} />
                   <button className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 dark:bg-ink-800 hover:bg-gold-400 hover:text-ink-950 transition-all"><Bookmark size={16} /></button>
                 </div>
               </div>

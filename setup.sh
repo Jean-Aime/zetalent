@@ -9,6 +9,16 @@
 
 set -e
 
+: "${DB_PASSWORD:?Set DB_PASSWORD before running setup.sh}"
+: "${JWT_SECRET:?Set JWT_SECRET before running setup.sh}"
+: "${ADMIN_EMAIL:?Set ADMIN_EMAIL before running setup.sh}"
+: "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD before running setup.sh}"
+
+if [ "${#ADMIN_PASSWORD}" -lt 12 ]; then
+    echo "ADMIN_PASSWORD must be at least 12 characters long." >&2
+    exit 1
+fi
+
 echo "========================================"
 echo " ZeTalent VPS Setup — AlmaLinux 9"
 echo "========================================"
@@ -35,7 +45,8 @@ systemctl start postgresql-15
 
 # Create DB and user
 echo "[3/9] Creating database..."
-sudo -u postgres psql -c "CREATE USER zetalent_user WITH PASSWORD 'ZeT@lent2024!Secure';"
+sudo -u postgres psql -v ON_ERROR_STOP=1 -v db_password="$DB_PASSWORD" \
+    -c "CREATE USER zetalent_user WITH PASSWORD :'db_password';"
 sudo -u postgres psql -c "CREATE DATABASE zetalent OWNER zetalent_user;"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE zetalent TO zetalent_user;"
 
@@ -67,17 +78,19 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=zetalent
 DB_USER=zetalent_user
-DB_PASSWORD=ZeT@lent2024!Secure
-JWT_SECRET=ZeTalentMedia2024SuperSecretJWTKey!@#$%^&*()
+ENVEOF
+printf 'DB_PASSWORD=%s\nJWT_SECRET=%s\n' "$DB_PASSWORD" "$JWT_SECRET" >> .env
+cat >> .env << 'ENVEOF'
 JWT_EXPIRES_IN=7d
 FRONTEND_URL=https://zetalent-media.com
 ENVEOF
+chmod 600 .env
 
 # Run migrations
 node migrate.js
 
 # Seed admin user
-node seed-admin.js
+ADMIN_NAME="${ADMIN_NAME:-ZeTalent Admin}" node seed-admin.js
 
 # ── 8. Frontend static files ──────────────────────────────────
 echo "[8/9] Deploying frontend..."
@@ -158,8 +171,6 @@ echo " Setup complete!"
 echo "========================================"
 echo " Site:    http://zetalent-media.com"
 echo " API:     http://zetalent-media.com/api/health"
-echo " Admin:   admin@zetalentmedia.com"
-echo " Pass:    12@Zetalentmedia34?"
 echo ""
 echo " NEXT: Run SSL setup:"
 echo "   bash ssl.sh"

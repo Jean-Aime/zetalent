@@ -122,7 +122,7 @@ app.get('/og/news/:slug', async (req, res) => {
       `SELECT a.image_url, a.image_alt,
               json_object_agg(t.locale, json_build_object('title',t.title,'excerpt',t.excerpt)) as translations
        FROM news_articles a LEFT JOIN news_translations t ON t.article_id = a.id
-       WHERE a.slug = $1 GROUP BY a.id`,
+       WHERE a.slug = $1 AND a.status = 'published' GROUP BY a.id`,
       [req.params.slug]
     );
     const article = rows[0];

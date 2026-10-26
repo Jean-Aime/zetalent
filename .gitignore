@@ -25,6 +25,17 @@ dist-ssr
 .env.local
 .env.production
 
+# Local build, tooling, and deployment artifacts
+/.bolt/
+/.vite/
+/frontend_dist/
+/backup*
+/zetalent-release-*.tar.gz
+/zetalent
+/-files
+*.dump
+*.sql.gz
+
 # uploads (keep placeholder)
 backend/uploads/*
 !backend/uploads/.gitkeep

@@ -5,7 +5,7 @@ import {
   Newspaper, Plus, Search, Edit3, Trash2, X, Check,
   ChevronLeft, ChevronRight, TrendingUp, Star, Zap, Loader2, AlertCircle,
   FileText, Image as ImageIcon, Globe, Settings2, Bold, Italic,
-  Link as LinkIcon, Upload, Eye,
+  Link as LinkIcon, Upload, Eye, Copy,
 } from 'lucide-react';
 import { api, uploadImage } from '../../lib/api';
 
@@ -43,15 +43,25 @@ interface Article {
   author: string; image_url: string; image_alt: string;
   published_at: string; is_featured: boolean;
   is_trending: boolean; is_breaking: boolean; status: string;
+  private_token: string | null;
   views: number;
   translations: Record<Locale, { title: string; excerpt: string; body: string }>;
 }
 
 interface FormState {
   slug: string; category: string; sport_slug: string; author: string;
-  image_url: string; status: string;
+  image_url: string; status: string; published_at: string;
   is_featured: boolean; is_trending: boolean; is_breaking: boolean;
   translations: Record<Locale, { title: string; excerpt: string; body: string }>;
+}
+
+function localDateValue(value?: string): string {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 const emptyTranslations = (): Record<Locale, { title: string; excerpt: string; body: string }> => ({
@@ -62,7 +72,8 @@ const emptyTranslations = (): Record<Locale, { title: string; excerpt: string; b
 
 const emptyForm = (): FormState => ({
   slug: '', category: 'match-reports', sport_slug: 'football', author: 'Admin',
-  image_url: '', status: 'published', is_featured: false, is_trending: false, is_breaking: false,
+  image_url: '', status: 'published', published_at: localDateValue(),
+  is_featured: false, is_trending: false, is_breaking: false,
   translations: emptyTranslations(),
 });
 
@@ -91,6 +102,7 @@ export function AdminNews() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [copiedArticleId, setCopiedArticleId] = useState<string | null>(null);
   const perPage = 8;
 
   useEffect(() => { loadAll(); }, []);
@@ -123,6 +135,17 @@ export function AdminNews() {
   const pageArticles = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   const getTitle = (a: Article) => a.translations?.en?.title || a.translations?.fr?.title || a.translations?.rw?.title || a.slug;
+
+  const copyPrivateLink = async (article: Article) => {
+    if (!article.private_token) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/private/${article.private_token}`);
+      setCopiedArticleId(article.id);
+      window.setTimeout(() => setCopiedArticleId(current => current === article.id ? null : current), 2000);
+    } catch {
+      setError('Could not copy the private link. Check clipboard permissions and try again.');
+    }
+  };
 
   const startEdit = (a: Article) => {
     setEditingId(a.id);
@@ -219,6 +242,7 @@ export function AdminNews() {
             author: article.author,
             image_url: article.image_url || '',
             status: article.status,
+            published_at: localDateValue(article.published_at),
             is_featured: article.is_featured,
             is_trending: article.is_trending,
             is_breaking: article.is_breaking,
@@ -256,6 +280,8 @@ export function AdminNews() {
           <option value="all">All Status</option>
           <option value="published">Published</option>
           <option value="draft">Draft</option>
+          <option value="private">Private link</option>
+          <option value="scheduled">Scheduled</option>
         </select>
       </motion.div>
 
@@ -302,9 +328,17 @@ export function AdminNews() {
                       </td>
                       <td className="px-4 py-3 text-ink-600 dark:text-ink-300 whitespace-nowrap">{article.author}</td>
                       <td className="px-4 py-3">
-                        <span className={`chip ${article.status === 'published' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-ink-100 dark:bg-ink-700/50 text-ink-500'}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${article.status === 'published' ? 'bg-green-500' : 'bg-ink-400'}`} />
-                          {article.status === 'published' ? 'Published' : 'Draft'}
+                        <span className={`chip ${
+                          article.status === 'published'
+                            ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                            : article.status === 'private'
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                              : 'bg-ink-100 dark:bg-ink-700/50 text-ink-500'
+                        }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${
+                            article.status === 'published' ? 'bg-green-500' : article.status === 'private' ? 'bg-purple-500' : 'bg-ink-400'
+                          }`} />
+                          {article.status === 'published' ? 'Published' : article.status === 'private' ? 'Private link' : article.status === 'scheduled' ? 'Scheduled' : 'Draft'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-ink-400 dark:text-ink-500 whitespace-nowrap">
@@ -315,6 +349,13 @@ export function AdminNews() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          {article.status === 'private' && article.private_token && (
+                            <button onClick={() => copyPrivateLink(article)} title="Copy private link"
+                              className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-purple-600 hover:bg-purple-500/10 dark:text-purple-400 transition-colors">
+                              {copiedArticleId === article.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                              <span className="hidden xl:inline">{copiedArticleId === article.id ? 'Copied' : 'Copy link'}</span>
+                            </button>
+                          )}
                           <button onClick={() => editingId === article.id ? cancelEdit() : startEdit(article)}
                             className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-gold-400/10 hover:text-gold-500 transition-colors">
                             <Edit3 className="h-4 w-4" />
@@ -838,7 +879,19 @@ function SettingsPanel({ form, updateForm, sports }: {
         <select value={form.status} onChange={e => updateForm('status', e.target.value)} className="input-zt text-sm">
           <option value="published">Published</option>
           <option value="draft">Draft</option>
+          <option value="private">Private link</option>
+          <option value="scheduled">Scheduled</option>
         </select>
+        {form.status === 'private' && (
+          <p className="mt-1.5 text-xs text-purple-600 dark:text-purple-400">
+            Only people with the private link can view this article. Anyone with the link can forward it.
+          </p>
+        )}
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Article date</label>
+        <input type="date" value={form.published_at}
+          onChange={e => updateForm('published_at', e.target.value)} className="input-zt text-sm" />
       </div>
       <div>
         <label className="block text-xs font-semibold text-ink-500 dark:text-ink-400 mb-1.5">Category</label>
@@ -910,7 +963,8 @@ function AddArticleModal({ initialSportSlug, sports, saving, onSave, onCancel }:
       topRight={<>
         <button onClick={onCancel} className="px-3 py-1.5 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Discard</button>
         <button onClick={handleSave} disabled={saving} className="btn-gold text-sm">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Publish
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {form.status === 'draft' ? 'Save Draft' : form.status === 'private' ? 'Create Private Link' : 'Publish'}
         </button>
       </>}
       error={modalError} onErrorClose={() => setModalError(null)}>
@@ -956,7 +1010,8 @@ function EditArticleModal({ initial, sports, saving, onSave, onCancel }: EditArt
       topRight={<>
         <button onClick={onCancel} className="px-3 py-1.5 text-sm font-semibold text-ink-600 dark:text-ink-300 rounded-full hover:bg-ink-100 dark:hover:bg-ink-700 transition-colors">Discard</button>
         <button onClick={handleSave} disabled={saving} className="btn-gold text-sm">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Update
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {form.status === 'draft' ? 'Save Draft' : form.status === 'private' ? 'Save Private Link' : 'Update'}
         </button>
       </>}
       error={modalError} onErrorClose={() => setModalError(null)}>

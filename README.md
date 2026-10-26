@@ -39,6 +39,8 @@ The platform features a public-facing news and sports portal with a powerful adm
 - News article editor with multi-language tabs (EN / FR / RW)
 - Rich body editor with image upload support
 - Article settings: status, category, sport, author, cover image, featured / trending / breaking flags
+- Draft, published, and private-link article statuses with an editable article date
+- Shareable private article links that stay out of public news listings
 - Mobile-responsive modal editor with collapsible settings panel
 - Media library
 - Team, player, match and standings management
@@ -107,8 +109,15 @@ cd backend
 cp .env.example .env
 # Fill in your environment variables
 npm install
-node seed-admin.js
 npm start
+```
+
+The seed script requires `ADMIN_EMAIL` and `ADMIN_PASSWORD` to be provided in
+the environment. Use a unique password of at least 12 characters; do not store
+it in source control. For example, in a Bash shell:
+
+```bash
+ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='use-a-unique-password-of-12-or-more-characters' node seed-admin.js
 ```
 
 ### Frontend Setup
@@ -126,9 +135,13 @@ npm run dev
 **Backend `.env`**
 ```env
 PORT=4000
-DATABASE_URL=postgresql://user:password@localhost:5432/zetalent
-JWT_SECRET=your_jwt_secret
-FRONTEND_URL=https://zetalent-media.com
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=zetalent
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+JWT_SECRET=replace_with_a_long_random_secret
+FRONTEND_URL=https://yourdomain.com
 ```
 
 **Frontend `.env.local`**
@@ -142,16 +155,9 @@ VITE_API_URL=http://localhost:4000/api
 
 See [DEPLOY.md](./DEPLOY.md) for the full VPS deployment guide.
 
-Quick deploy after changes:
-
-```bash
-cd /var/www/zetalent
-git pull origin main
-cd frontend
-npm run build
-\cp -rf dist/* /var/www/zetalent/frontend_dist/
-pm2 restart zetalent-api
-```
+Production deployments should use a reviewed, staged release and database
+backup. Do not pull directly into the live directory; follow the deployment
+steps in [DEPLOY.md](./DEPLOY.md).
 
 ---
 
@@ -162,6 +168,7 @@ pm2 restart zetalent-api
 | POST | `/api/auth/login` | No | Admin login |
 | GET | `/api/news` | No | List published articles |
 | GET | `/api/news/:slug` | No | Get article by slug |
+| GET | `/api/news/private/:token` | Private link | Get a private article using its unlisted share link |
 | POST | `/api/news` | Yes | Create article |
 | PATCH | `/api/news/:id` | Yes | Update article |
 | DELETE | `/api/news/:id` | Yes | Delete article |
@@ -171,8 +178,11 @@ pm2 restart zetalent-api
 | GET | `/api/matches` | No | List matches |
 | POST | `/api/upload` | Yes | Upload image |
 | GET | `/og/news/:slug` | No | OG meta page for social crawlers |
-
 ---
+
+Private articles do not appear in public news listings or regular article URLs.
+The private URL is a bearer link: anyone who receives it can view the article,
+so share it only with intended recipients.
 
 ## Social Sharing
 
