@@ -207,4 +207,4 @@ Unauthorized use will be subject to legal action.
 | | |
 |---|---|
 | Website | [zetalent-media.com](https://zetalent-media.com) |
-| Email | zetalentmedia@gmail.com |
+| Email | baraime450@gmail.com |
